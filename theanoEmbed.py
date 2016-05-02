@@ -38,11 +38,10 @@ srng = RandomStreams()
 #y = T.matrix()
 #X = T.ivector()
 #Y = T.ivector()
-ACTUAL = T.ivector()
-PREDICT = T.ivector()
 max_len = T.iscalar('max_len')
-X = T.iscalar()
-Y = T.iscalar()
+X = T.iscalar('x')
+Y = T.iscalar('y')
+ACTUAL = T.ivector('actual')
 
 vocab = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
 
@@ -150,13 +149,13 @@ def dropout(X,p=0.):
     return X
 
 # THETA PACKING/UNPACKING FOR LBFGS
-def packTheta(weights):
-    t = np.ravel(weights[0])
+def pack(weights):
+    t = weights[0].ravel()
     for i in range(1,len(weights)):
-        t = np.concatenate((t,np.ravel(weights[i])),axis=1) 
+        t = T.concatenate((t,weights[i].ravel())) 
     return t
 
-def unpackTheta(t,shapes):
+def unpack(t,shapes):
     prev_ind = 0
     weights = {}
     for k,v in iter(shapes.items()):
@@ -172,35 +171,6 @@ def thetaShape(shapes):
     for s in shapes:
         total_size += shapes[s]['x'] * shapes[s]['y']
     return (total_size,)
-
-def packStates(ss,so,hss,hso,h2ss,h2so,h3ss,h3so):
-    states = {}
-    states['ss'] = ss 
-    states['so'] = so
-    # Hidden Layer 1
-    states['hss'] = hss
-    states['hso'] = hso
-    # Hidden Layer 2
-    states['h2ss'] = h2ss
-    states['h2so'] = h2so
-    # Hidden Layer 3
-    states['h3ss'] = h3ss
-    states['h3so'] = h3so
-    return states
-
-def unpackStates(s):
-    ss = states['ss']
-    so = states['so']
-    # Hidden Layer 1
-    hss = states['hss']
-    hso = states['hso']
-    # Hidden Layer 2
-    h2ss = states['h2ss']
-    h2so = states['h2so']
-    # Hidden Layer 3
-    h3ss = states['h3ss']
-    h3so = states['h3so']
-    return ss,so,hss,hso,h2ss,h2so,h3ss,h3so
 
 # MODEL AND OPTIMIZATION
 ######################################################################
@@ -218,84 +188,97 @@ def RMSprop(cost, params, lr=0.001, rho=0.9, epsilon=1e-6):
         updates.append((p, p - lr * g))
     return updates
 
-# Definition of the cell computation.
-def lstm_cell(i,o,state,n,x_all,m_all,ib,fb,cb,ob):
-    """Create a LSTM cell. See e.g.: http://arxiv.org/pdf/1402.1128v1.pdf
-    Note that in this formulation, we omit the various connections between the
-    previous state and the gates."""
-    i_mul = T.dot(i,x_all)
-    o_mul = T.dot(o,m_all)
+class RNN:
+    def __init__(self,theta,shapes,states_packed,state_shapes,batch_size,vocabulary_size,embed_size):
+        self.batch_size = batch_size
+        self.vocabulary_size = vocabulary_size
+        self.embed_size = embed_size
+        weights = unpack(theta,shapes)
+        states = unpack(states_packed,state_shapes)
+        # The packing/unpacking process doesn't presever order
+        # have to rearrange them here
+        self.embed = weights['embed']
+        self.x_all = weights['x_all']
+        self.m_all= weights['m_all']
+        self.ib = weights['ib']
+        self.fb = weights['fb']
+        self.cb = weights['cb']
+        self.ob = weights['ob']
+        # Hidden Cell
+        self.h_x_all = weights['h_x_all']
+        self.h_m_all = weights['h_m_all']
+        self.h_ib = weights['h_ib']
+        self.h_fb = weights['h_fb']
+        self.h_cb = weights['h_cb']
+        self.h_ob = weights['h_ob']
+        # Hidden Cell 2
+        self.h2_x_all = weights['h2_x_all']
+        self.h2_m_all = weights['h2_m_all']
+        self.h2_ib = weights['h2_ib']
+        self.h2_fb = weights['h2_fb']
+        self.h2_cb = weights['h2_cb']
+        self.h2_ob = weights['h2_ob']
+        # Hidden Cell 3
+        self.h3_x_all = weights['h3_x_all']
+        self.h3_m_all = weights['h3_m_all']
+        self.h3_ib = weights['h3_ib']
+        self.h3_fb = weights['h3_fb']
+        self.h3_cb = weights['h3_cb']
+        self.h3_ob = weights['h3_ob']
+        # Final Weights
+        self.w = weights['w']
+        self.b = weights['b']
 
-    ix_mul = i_mul[:,:n]# tf.matmul(i, ix)
-    fx_mul = i_mul[:,n:2*n]# tf.matmul(i, fx)
-    cx_mul = i_mul[:,2*n:3*n]# tf.matmul(i, cx)
-    ox_mul = i_mul[:,3*n:]# tf.matmul(i, ox)
+        # STATES
+        self.ss = states['ss']
+        self.so = states['so']
+        self.hss = states['hss']
+        self.hso = states['hso']
+        self.h2ss = states['h2ss']
+        self.h2so = states['h2so']
+        self.h3ss = states['h3ss']
+        self.h3so = states['h3so']
 
-    im_mul = o_mul[:,:n] # tf.matmul(o,im)
-    fm_mul = o_mul[:,n:2*n] # tf.matmul(o,fm)
-    cm_mul = o_mul[:,2*n:3*n] # tf.matmul(o,cm)
-    om_mul = o_mul[:,3*n:] # tf.matmul(o,om)
+    # Definition of the cell computation.
+    def lstm_cell(i,o,state,n,x_all,m_all,ib,fb,cb,ob):
+        """Create a LSTM cell. See e.g.: http://arxiv.org/pdf/1402.1128v1.pdf
+        Note that in this formulation, we omit the various connections between the
+        previous state and the gates."""
+        i_mul = T.dot(i,x_all)
+        o_mul = T.dot(o,m_all)
 
-    input_gate = T.nnet.sigmoid(ix_mul + im_mul + ib)
-    forget_gate = T.nnet.sigmoid(fx_mul + fm_mul + fb)
-    update = cx_mul + cm_mul + cb
-    state = (forget_gate * state) + (input_gate * T.tanh(update))
-    output_gate = T.nnet.sigmoid(ox_mul + om_mul + ob)
-    return output_gate * T.tanh(state), state
+        ix_mul = i_mul[:,:n]# tf.matmul(i, ix)
+        fx_mul = i_mul[:,n:2*n]# tf.matmul(i, fx)
+        cx_mul = i_mul[:,2*n:3*n]# tf.matmul(i, cx)
+        ox_mul = i_mul[:,3*n:]# tf.matmul(i, ox)
 
+        im_mul = o_mul[:,:n] # tf.matmul(o,im)
+        fm_mul = o_mul[:,n:2*n] # tf.matmul(o,fm)
+        cm_mul = o_mul[:,2*n:3*n] # tf.matmul(o,cm)
+        om_mul = o_mul[:,3*n:] # tf.matmul(o,om)
 
-def model(X,theta,shapes,states):
-    weights = unpackTheta(theta,shapes)
-    # The packing/unpacking process doesn't presever order
-    # have to rearrange them here
-    embed = weights['embed']
-    x_all = weights['x_all']
-    m_all= weights['m_all']
-    ib = weights['ib']
-    fb = weights['fb']
-    cb = weights['cb']
-    ob = weights['ob']
-    # Hidden Cell
-    h_x_all = weights['h_x_all']
-    h_m_all = weights['h_m_all']
-    h_ib = weights['h_ib']
-    h_fb = weights['h_fb']
-    h_cb = weights['h_cb']
-    h_ob = weights['h_ob']
-    # Hidden Cell 2
-    h2_x_all = weights['h2_x_all']
-    h2_m_all = weights['h2_m_all']
-    h2_ib = weights['h2_ib']
-    h2_fb = weights['h2_fb']
-    h2_cb = weights['h2_cb']
-    h2_ob = weights['h2_ob']
-    # Hidden Cell 3
-    h3_x_all = weights['h3_x_all']
-    h3_m_all = weights['h3_m_all']
-    h3_ib = weights['h3_ib']
-    h3_fb = weights['h3_fb']
-    h3_cb = weights['h3_cb']
-    h3_ob = weights['h3_ob']
-    # Final Weights
-    w = weights['w']
-    b = weights['b']
+        input_gate = T.nnet.sigmoid(ix_mul + im_mul + ib)
+        forget_gate = T.nnet.sigmoid(fx_mul + fm_mul + fb)
+        update = cx_mul + cm_mul + cb
+        state = (forget_gate * state) + (input_gate * T.tanh(update))
+        output_gate = T.nnet.sigmoid(ox_mul + om_mul + ob)
+        return output_gate * T.tanh(state), state
 
-    # Saved states
-    ss,so,hss,hso,h2ss,h2so,h3ss,h3so = unpackStates(states)
-    
-    #MODEL
-    e = embed[X].reshape((batch_size,embed_size))
-    so,ss     = lstm_cell(e     ,so,   ss,    num_nodes, x_all,    m_all,    ib,    fb,    cb,    ob)
-    hso,hss   = lstm_cell(so,   hso,  hss,  num_nodes2, h_x_all,  h_m_all,  h_ib,  h_fb,  h_cb,  h_ob)
-    h2so,h2ss = lstm_cell(hso,  h2so, h2ss, num_nodes3, h2_x_all, h2_m_all, h2_ib, h2_fb, h2_cb, h2_ob)
-    h3so,h3ss = lstm_cell(h2so, h3so, h3ss, vocabulary_size, h3_x_all, h3_m_all, h3_ib, h3_fb, h3_cb, h3_ob)
-    pyx = T.nnet.softmax(T.dot(h3so,w) + b)
-    pred = T.argmax(pyx,axis=1)
+    def forward_prop(self,X):
+        #MODEL
+        e = self.embed[X].reshape((self.batch_size,self.embed_size))
+        self.so,self.ss     = lstm_cell(e,    so,   ss,   num_nodes,  x_all,    m_all,    ib,    fb,    cb,    ob)
+        hso,hss   = lstm_cell(so,   hso,  hss,  num_nodes2, h_x_all,  h_m_all,  h_ib,  h_fb,  h_cb,  h_ob)
+        h2so,h2ss = lstm_cell(hso,  h2so, h2ss, num_nodes3, h2_x_all, h2_m_all, h2_ib, h2_fb, h2_cb, h2_ob)
+        h3so,h3ss = lstm_cell(h2so, h3so, h3ss, vocabulary_size, h3_x_all, h3_m_all, h3_ib, h3_fb, h3_cb, h3_ob)
+        pyx = T.nnet.softmax(T.dot(h3so,w) + b)
+        pred = T.argmax(pyx,axis=1)
 
-    # Repackage saved states
-    states = packStates(ss,so,hss,hso,h2ss,h2so,h3ss,h3so)
-    
-    return pred,pyx,states
+        # Repackage saved states
+        state_list = [ss,so,hss,hso,h2ss,h2so,h3ss,h3so]
+        states_packed = pack(state_list)
+        
+        return pred,pyx,states_packed
         
 
 # SHAPES OF WEIGHT MATRICES
@@ -313,6 +296,7 @@ shapes = {'embed':{'x':vocabulary_size+1,'y':embed_size}, # Note we have one ext
               
               # Hidden Cell
               'h_x_all':{'x':num_nodes,'y':4*num_nodes2},
+
               'h_m_all':{'x':num_nodes2,'y':4*num_nodes2},
               'h_ib':{'x':1,'y':num_nodes2},
               'h_fb':{'x':1,'y':num_nodes2},
@@ -351,52 +335,49 @@ shapes = {'embed':{'x':vocabulary_size+1,'y':embed_size}, # Note we have one ext
               'b':{'x':1,'y':vocabulary_size},
               }
 
+state_shapes = {'ss':{'x':batch_size,'y':num_nodes},
+              'so':{'x':batch_size,'y':num_nodes},
+                # Hidden states - layer 1
+              'hss':{'x':batch_size,'y':num_nodes2},
+              'hso':{'x':batch_size,'y':num_nodes2},
+                # Hidden states - layer 2
+              'h2ss':{'x':batch_size,'y':num_nodes3},
+              'h2so':{'x':batch_size,'y':num_nodes3},
+                 # Hidden states - layer 3
+              'h3ss':{'x':batch_size,'y':vocabulary_size},
+              'h3so':{'x':batch_size,'y':vocabulary_size}
+            }
+
+
 fox = initFox()
 
 # initialize theta 
 ts = thetaShape(shapes)
+ss = thetaShape(state_shapes)
 
 if use_saved:
     theta = castData(pickle_load('theta_orig.pkl'))
-    states = pickle_load('states_orig.pkl')
+    states = castData(pickle_load('states_orig.pkl'))
 else:
     theta = init_weights(ts,'theta')#thetaLoad(pickle_load('theta_orig.pkl'))
-    states = {}
-    states['ss'] = init_weights((batch_size,num_nodes),'saved_state') 
-    states['so'] = init_weights((batch_size,num_nodes),'saved_output')
-    # Hidden Layer 1
-    states['hss'] = init_weights((batch_size,num_nodes2),'h_saved_state')
-    states['hso'] = init_weights((batch_size,num_nodes2),'h_saved_output')
-    # Hidden Layer 2
-    states['h2ss'] = init_weights((batch_size,num_nodes3),'h2_saved_state')
-    states['h2so'] = init_weights((batch_size,num_nodes3),'h2_saved_output')
-    # Hidden Layer 3
-    states['h3ss'] = init_weights((batch_size,vocabulary_size),'h3_saved_output')
-    states['h3so'] = init_weights((batch_size,vocabulary_size),'h3_saved_output')
+    states = init_weights(ss,'states')
 
-y_pred,py,states = model(X,theta,shapes,states)
-
-cost = T.mean((y_pred - Y) ** 2)
-errors = T.mean((PREDICT - ACTUAL) ** 2)
-params = [theta]
-updates = RMSprop(cost,params,lr=0.01)
-ss,so,hss,hso,h2ss,h2so,h3ss,h3so = unpackStates(states)
+y_pred,py,states = model(X,theta,shapes,states,state_shapes)
 
 train = theano.function(inputs=[X], outputs=states, allow_input_downcast=True)
+
 predict = theano.function(inputs=[X], outputs=y_pred, allow_input_downcast=True)
-predicted_word = theano.scan(fn=lambda prior_result, X: predic(X),
+
+preds,updates = theano.scan(fn=lambda prior_result, X: predict(prior_result),
                               outputs_info=T.ones_like(X),
                               non_sequences=X,
                               n_steps=max_len)
-prediction = theano.function(inputs=[X,MAX_WORD_LENGTH],outputs=predicted_word)
-learn = theano.function(inputs=[PREDICT,ACTUAL], outputs=errors, updates=updates, allow_input_downcast=True)
-get_states = theano.function(inputs=[X], outputs=[ss,so,hss,hso,h2ss,h2so,h3ss,h3so], allow_input_downcast=True)
 
-def prediction(max_len=10):
-    pred_ids = [predict(EOS)]
-    for i in range(max_len):
-        output.append(predict(pred_ids[i]))
-    return pred_ids
+cost = T.mean((preds - ACTUAL) ** 2)
+params = [theta,states]
+update = RMSprop(cost,params,lr=0.01)
+
+learn = theano.function(inputs=[X,ACTUAL], outputs=cost, updates=update, allow_input_downcast=True)
 
 start_time = timeit.default_timer()
 print('Optimizing using RMSProp...')
@@ -409,8 +390,8 @@ for i in range(10000):
         for j in range(len(new_batch[0])):
             # Train 1 letter at a time
             train(train_input[j])
-        pred = prediction(MAX_WORD_SIZE)
-        c += learn(pred,actual)
+        pred = predict(EOS)
+        c += learn(EOS,actual)
     c /= TRAIN_BATCHES
     
     fox_pred = ''

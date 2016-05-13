@@ -9,16 +9,11 @@ import theano
 import theano.tensor as T
 import pickle
 import random
+from utils import floatX
 
 # SCIPY
 import random
 
-
-
-# INIT RANDOM
-srng = RandomStreams()
-####################################################################################################
-# CONSTANTS
 
 
 # I/O
@@ -112,57 +107,3 @@ class SoftmaxLayer:
         self.pyx = T.nnet.softmax(T.dot(X,w) + b)
         self.pred = T.argmax(pyx,axis=1)
 
-
-# SHAPES OF WEIGHT MATRICES
-shapes = {'embed':{'x':vocabulary_size+1,'y':embed_size}, # Note we have one extra row for the EOS tag (index -1)
-              'x_all':{'x':embed_size,'y':4*num_nodes},
-              'm_all':{'x':num_nodes,'y':4*num_nodes},
-              'ib':{'x':1,'y':num_nodes},
-              'fb':{'x':1,'y':num_nodes},
-              'cb':{'x':1,'y':num_nodes},
-              'ob':{'x':1,'y':num_nodes},
-              
-              # NOT TRAINED
-              #'saved_output':{'x':batch_size,'y':num_nodes},
-              #'saved_state':{'x':batch_size,'y':num_nodes},
-              
-              # Hidden Cell
-              'h_x_all':{'x':num_nodes,'y':4*num_nodes2},
-
-              'h_m_all':{'x':num_nodes2,'y':4*num_nodes2},
-              'h_ib':{'x':1,'y':num_nodes2},
-              'h_fb':{'x':1,'y':num_nodes2},
-              'h_cb':{'x':1,'y':num_nodes2},
-              'h_ob':{'x':1,'y':num_nodes2},
-
-              # NOT TRAINED
-              #'h_saved_output':{'x':batch_size,'y':num_nodes2},
-              #'h_saved_state':{'x':batch_size,'y':num_nodes2},
-
-               # Hidden Cell 2
-              'h2_x_all':{'x':num_nodes2,'y':4*num_nodes3},
-              'h2_m_all':{'x':num_nodes3,'y':4*num_nodes3},
-              'h2_ib':{'x':1,'y':num_nodes3},
-              'h2_fb':{'x':1,'y':num_nodes3},
-              'h2_cb':{'x':1,'y':num_nodes3},
-              'h2_ob':{'x':1,'y':num_nodes3},
-
-              # NOT TRAINED
-              #'h2_saved_output':{'x':batch_size,'y':num_nodes2},
-              #'h2_saved_state':{'x':batch_size,'y':num_nodes2},
-
-               # Hidden Cell 3
-              'h3_x_all':{'x':num_nodes3,'y':4*vocabulary_size},
-              'h3_m_all':{'x':vocabulary_size,'y':4*vocabulary_size},
-              'h3_ib':{'x':1,'y':vocabulary_size},
-              'h3_fb':{'x':1,'y':vocabulary_size},
-              'h3_cb':{'x':1,'y':vocabulary_size},
-              'h3_ob':{'x':1,'y':vocabulary_size},
-
-              # NOT TRAINED
-              #'h3_saved_output':{'x':batch_size,'y':vocabulary_size},
-              #'h3_saved_state':{'x':batch_size,'y':vocabulary_size},
-              
-              'w':{'x':vocabulary_size,'y':vocabulary_size},
-              'b':{'x':1,'y':vocabulary_size},
-              }

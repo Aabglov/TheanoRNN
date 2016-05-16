@@ -38,10 +38,6 @@ srng = RandomStreams()
 # CONSTANTS
 
 # VARIABLES INIT
-#X = T.matrix()
-#y = T.matrix()
-#X = T.ivector()
-#Y = T.ivector()
 max_len = T.iscalar('max_len')
 X = T.iscalar('x')
 Y = T.iscalar('y')
@@ -56,7 +52,7 @@ MAX_WORD_SIZE = 10
 TRAIN_BATCHES = 1000
 TEST_BATCHES = int(TRAIN_BATCHES)# * 0.2)
 VALID_BATCHES = int(TRAIN_BATCHES * 0.2)
-batch_size = 1#MAX_WORD_SIZE#20
+batch_size = 20 # MAX_WORD_SIZE
 embed_size = 256
 num_nodes = 256
 num_nodes2 = 256
@@ -102,26 +98,25 @@ class RNN:
         self.softmax_layer = SoftmaxLayer(vocab_size)
 
     def forward_prop(self,X):
-        e = self.embed[X].reshape((self.batch_size,self.embed_size))
-        # TODO        
+        o = self.embed[X].reshape((self.batch_size,self.embed_size))
+        for layer_name in self.hidden_layer_names:
+            hidden_layer = getattr(self,layer_name)
+            o = hidden_layer.forward_prop(o)
+        pred = self.softmax_layer.forward_prop(o)
         return pred
-        
-fox = initFox()
 
-# initialize theta 
-ts = thetaShape(shapes)
-ss = thetaShape(state_shapes)
+    def cost(self,Y):
+        # May use a different cost function here
+        return T.mean((self.pred - Y) ** 2)
 
-if use_saved:
-    theta = castData(pickle_load('theta_orig.pkl'))
-    states = castData(pickle_load('states_orig.pkl'))
-else:
-    theta = init_weights(ts,'theta')#thetaLoad(pickle_load('theta_orig.pkl'))
-    states = init_weights(ss,'states')
+    
+fox = wordHelpers.initFox()
 
-y_pred,py,states = model(X,theta,shapes,states,state_shapes)
+nodes = [128,256,256]
 
-train = theano.function(inputs=[X], outputs=states, allow_input_downcast=True)
+rnn = RNN(vocabulary_size,embed_size,vocabulary_size,nodes,batch_size)
+
+y_pred = rnn.forward_prop(X)
 
 predict = theano.function(inputs=[X], outputs=y_pred, allow_input_downcast=True)
 
@@ -129,12 +124,9 @@ preds,updates = theano.scan(fn=lambda prior_result, X: predict(prior_result),
                               outputs_info=T.ones_like(X),
                               non_sequences=X,
                               n_steps=max_len)
-
-cost = T.mean((preds - ACTUAL) ** 2)
 params = [theta,states]
 update = RMSprop(cost,params,lr=0.01)
 
-learn = theano.function(inputs=[X,ACTUAL], outputs=cost, updates=update, allow_input_downcast=True)
 
 start_time = timeit.default_timer()
 print('Optimizing using RMSProp...')

@@ -5,14 +5,14 @@
 
 # THEANO
 import numpy as np
-
+from utils import castInt
 # SCIPY
 import random
 
 vocab = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
 vocabulary_size = len(vocab)
 MAX_WORD_SIZE = 10
-
+EOS = -1
 
 def char2id(char):
   if char in vocab:

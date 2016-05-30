@@ -101,40 +101,57 @@ class RNN:
             hidden_layer = getattr(self,layer_name)
             o = hidden_layer.forward_prop(o)
         self.softmax_layer.forward_prop(o)
-        return self.softmax_layer.pyx
+        #return self.softmax_layer.pyx
+        return T.argmax(self.softmax_layer.pyx,axis=1)
 
     def predict(self):
         self.pred = T.argmax(self.softmax_layer.pyx,axis=1)
         return self.pred
-
-    #def loss(self,Y):
-        ## May use a different cost function here
-        # return T.mean((self.pred - Y) ** 2)
-
     
 fox = wh.initFox()
 
-nodes = [128,256]
+nodes = [128]
+
+# GET DATA
+#train_set_x,train_set_y,test_set_x,test_set_y,valid_set_x,valid_set_y = load(hot=False,words=True)
 
 rnn = RNN(wh.vocabulary_size,embed_size,wh.vocabulary_size,nodes,batch_size)
 
-pyx = rnn.forward_prop(X)
-
-y_pred = rnn.predict()
+y_pred = rnn.forward_prop(X)
 
 cost = T.mean((y_pred - Y) ** 2)
-
 params = rnn.update_params
-update = RMSprop(cost,params,lr=0.01)
+updates = RMSprop(cost,params,lr=1.0)
+test_back_prop = updates[0]
 
-train = theano.function(inputs=[X], outputs=pyx, allow_input_downcast=True)
-predict = theano.function(inputs=[X,Y], outputs=cost, updates=update, allow_input_downcast=True)
+predict = theano.function(inputs=[X], outputs = y_pred, allow_input_downcast=True)
+back_prop = theano.function(inputs=[X,Y], outputs=cost, updates=updates, allow_input_downcast=True)
 
-for i in range(10):
-    c = train(i)
-print('c',c.shape)
+test_updates = theano.function(inputs=[X,Y], outputs=test_back_prop, allow_input_downcast=True,on_unused_input='warn')
 
-predict(wh.EOS,5)
+# BEGIN TOY PROBLEM
+corpus = 'mary had a little lamb whose fleece was white as snow'.split(' ')
+corpus_len = len(corpus)
+for _ in range(10):
+    total_cost = 0.
+    for c in corpus:
+        for i in range(len(c)-1):
+            total_cost += back_prop(wh.char2id(c[i]),wh.char2id(c[i+1]))
+        total_cost += back_prop(wh.char2id(c[-1]),wh.EOS)
+    print("Completed iteration:",_,"Cost: ",total_cost/corpus_len)
+        
+print("Training complete")
+seed = 'm'
+output = [seed]
+for _ in range(30):
+    p = predict(wh.char2id(seed))
+    letter = wh.id2char(p[0])
+    output.append(letter)
+    seed = letter
+
+print("prediction:",output)
+      
+    
 
 ##preds,updates = theano.scan(fn=lambda prior_result, X: predict(prior_result),
 ##                              outputs_info=T.ones_like(X),

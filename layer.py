@@ -43,6 +43,7 @@ class LSTMLayer:
         # LSTM cell weights
         self.x_all = init_weights(input_size,output_size*4,'{}_x_all'.format(name))
         self.m_all = init_weights(output_size,output_size*4,'{}_m_all'.format(name))
+        
         self.ib = init_weights(1,output_size,'{}_ib'.format(name))
         self.fb = init_weights(1,output_size,'{}_fb'.format(name))
         self.cb = init_weights(1,output_size,'{}_cb'.format(name))
@@ -51,7 +52,7 @@ class LSTMLayer:
         self.saved_state = init_weights(batch_size,output_size,'{}_ss'.format(name))
         self.saved_output = init_weights(batch_size,output_size,'{}_so'.format(name))
         # Variables updated through back-prop
-        self.update_params = [self.x_all,self.m_all,self.ib,self.fb,self.cb,self.ob] # Should state be included?
+        self.update_params = [self.x_all,self.m_all,self.ib,self.fb,self.cb,self.ob,self.saved_state,self.saved_output] # Should state be included?
 
     # Expects embedded input
     def forward_prop(self,F):
@@ -93,8 +94,4 @@ class SoftmaxLayer:
     def forward_prop(self,F):
         self.pyx = T.nnet.softmax(T.dot(F,self.w) + self.b)
         return self.pyx
-
-    # Prediction separated (arbitrarily from update)
-    #def predict(self):
-    #    self.pred = T.argmax(self.pyx,axis=1)
 

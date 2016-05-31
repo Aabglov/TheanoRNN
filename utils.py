@@ -10,6 +10,7 @@ import theano.tensor as T
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import pickle
 import random
+import zipfile
 
 # INIT RANDOM
 srng = RandomStreams()
@@ -18,6 +19,12 @@ srng = RandomStreams()
 
 
 # I/O
+def read_data(filename):
+    f = zipfile.ZipFile(filename)
+    for name in f.namelist():
+        return str(f.read(name))
+    f.close()
+
 def pickle_save(o,filename):
     with open(filename, 'wb') as f:
         pickle.dump(o,f)

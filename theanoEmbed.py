@@ -105,7 +105,7 @@ class RNN:
     
 fox = wh.initFox()
 
-nodes = [128]
+nodes = [512]
 
 # GET DATA
 #train_set_x,train_set_y,test_set_x,test_set_y,valid_set_x,valid_set_y = load(hot=False,words=True)
@@ -116,7 +116,7 @@ y_pred = rnn.forward_prop(X)
 
 cost = T.nnet.categorical_crossentropy(y_pred,Y).mean() #T.mean((y_pred - Y) ** 2)
 params = rnn.update_params
-updates = RMSprop(cost,params,lr=0.01)
+updates = RMSprop(cost,params,lr=0.003)
 test_back_prop = updates[0]
 
 predict = theano.function(inputs=[X], outputs = y_pred, allow_input_downcast=True)
@@ -125,20 +125,34 @@ back_prop = theano.function(inputs=[X,Y], outputs=cost, updates=updates, allow_i
 test_updates = theano.function(inputs=[X,Y], outputs=test_back_prop, allow_input_downcast=True,on_unused_input='warn')
 
 # BEGIN TOY PROBLEM
-corpus = 'mary had a little lamb whose fleece was white as snow'.split(' ')
+#corpus = [x for x in utils.read_data("/Users/keganrabil/Desktop/text8.zip").split(" ") if x]
+#print("Corpus Loaded")
+#corpus_len = 1000 #len(corpus)
+##for _ in range(1000):
+##    total_cost = 0.
+##    random.shuffle(corpus)
+##    for c in corpus[:corpus_len]:
+##        for i in range(len(c)-1):
+##            total_cost += back_prop(wh.char2id(c[i]),wh.id2onehot(wh.char2id(c[i+1])))
+##        total_cost += back_prop(wh.char2id(c[-1]),wh.id2onehot(wh.EOS))
+##    print("Completed iteration:",_,"Cost: ",total_cost/corpus_len)
+
+
+corpus = 'the quick brown fox'
 corpus_len = len(corpus)
+
 for _ in range(1000):
     total_cost = 0.
-    for c in corpus:
-        for i in range(len(c)-1):
-            total_cost += back_prop(wh.char2id(c[i]),wh.id2onehot(wh.char2id(c[i+1])))
-        total_cost += back_prop(wh.char2id(c[-1]),wh.id2onehot(wh.EOS))
+    for i in range(corpus_len-1):
+        c = corpus[i]
+        c_next = corpus[i+1]
+        total_cost += back_prop(wh.char2id(c),wh.id2onehot(wh.char2id(c_next)))
     print("Completed iteration:",_,"Cost: ",total_cost/corpus_len)
         
 print("Training complete")
-seed = 'm'
+seed = corpus[0]
 output = [seed]
-for _ in range(30):
+for _ in range(len(corpus)-1):
     p = predict(wh.char2id(seed))
     letter = wh.id2char(np.argmax(p,axis=1))
     output.append(letter)

@@ -82,16 +82,31 @@ class LSTMLayer:
         return self.saved_output
         
 class SoftmaxLayer:
-    def __init__(self,vocab_size):
-        self.x = vocab_size
-        self.y = 1
-        self.w = init_weights(vocab_size,vocab_size,'w')
+    def __init__(self,input_size,vocab_size):
+        self.x = input_size
+        self.y = vocab_size
+        self.w = init_weights(input_size,vocab_size,'w')
         self.b = init_weights(1,vocab_size,'b')
+        # Variables updated through back-prop
+        self.update_params = [self.w,self.b]
+    
+     # Expects saved output from last LSTM layer
+    def forward_prop(self,F):
+        self.pyx = T.dot(F,self.w) + self.b
+        self.pred = T.nnet.softmax(self.pyx)
+        return self.pred
+
+class LinearLayer:
+    def __init__(self,input_size,output_size):
+        self.x = input_size
+        self.y = output_size
+        self.w = init_weights(input_size,output_size,'w')
+        self.b = init_weights(1,output_size,'b')
         # Variables updated through back-prop
         self.update_params = [self.w,self.b]
         
      # Expects saved output from last LSTM layer
     def forward_prop(self,F):
-        self.pyx = T.nnet.softmax(T.dot(F,self.w) + self.b)
+        self.pyx = T.dot(F,self.w) + self.b
         return self.pyx
 

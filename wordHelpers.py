@@ -9,7 +9,7 @@ from utils import castInt,castData
 # SCIPY
 import random
 
-vocab = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+vocab = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',' ']
 vocabulary_size = len(vocab)
 MAX_WORD_SIZE = 10
 EOS = -1
@@ -58,6 +58,11 @@ def initFox():
         r = word2batch(reverseWord(w))
         fox.append([b,castInt(r)])
     return fox
+
+def id2onehot(i,vocab_size=vocabulary_size):
+    oh = np.zeros((1,vocab_size))
+    oh[0,i] = 1
+    return oh
 
 def words2text(words):
     text = ''

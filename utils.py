@@ -50,4 +50,3 @@ def dropout(X,p=0.):
         X *= srng.binomial(X.shape, p=retain_prob, dtype=theano.config.floatX)
         X /= retain_prob
     return X
-

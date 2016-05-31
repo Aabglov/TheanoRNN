@@ -25,7 +25,7 @@ from math import e,log,sqrt
 import scipy.optimize
 
 # LAYERS
-from layer import EmbedLayer,LSTMLayer,SoftmaxLayer
+from layer import EmbedLayer,LSTMLayer,LinearLayer,SoftmaxLayer
 
 # HELPERS
 import wordHelpers as wh
@@ -39,8 +39,8 @@ srng = RandomStreams()
 # VARIABLES INIT
 X = T.iscalar('x')
 E = T.vector('embedded_X')
-Y = T.iscalar('y')
-
+#Y = T.iscalar('y')
+Y = T.imatrix('y')
 
 # BATCHES
 TRAIN_BATCHES = 1000
@@ -92,21 +92,16 @@ class RNN:
             # Add the update parameters to the rnn class
             hl = getattr(self,name)
             self.update_params += hl.update_params
-        self.softmax_layer = SoftmaxLayer(vocab_size)
-        self.update_params += self.softmax_layer.update_params
+        self.output_layer = SoftmaxLayer(output_size,vocab_size)
+        self.update_params += self.output_layer.update_params
         
     def forward_prop(self,X):
         o = self.embed_layer.forward_prop(X)
         for layer_name in self.hidden_layer_names:
             hidden_layer = getattr(self,layer_name)
             o = hidden_layer.forward_prop(o)
-        self.softmax_layer.forward_prop(o)
-        #return self.softmax_layer.pyx
-        return T.argmax(self.softmax_layer.pyx,axis=1)
-
-    def predict(self):
-        self.pred = T.argmax(self.softmax_layer.pyx,axis=1)
-        return self.pred
+        self.output_layer.forward_prop(o)
+        return self.output_layer.pred
     
 fox = wh.initFox()
 
@@ -119,9 +114,9 @@ rnn = RNN(wh.vocabulary_size,embed_size,wh.vocabulary_size,nodes,batch_size)
 
 y_pred = rnn.forward_prop(X)
 
-cost = T.mean((y_pred - Y) ** 2)
+cost = T.nnet.categorical_crossentropy(y_pred,Y).mean() #T.mean((y_pred - Y) ** 2)
 params = rnn.update_params
-updates = RMSprop(cost,params,lr=1.0)
+updates = RMSprop(cost,params,lr=0.01)
 test_back_prop = updates[0]
 
 predict = theano.function(inputs=[X], outputs = y_pred, allow_input_downcast=True)
@@ -132,12 +127,12 @@ test_updates = theano.function(inputs=[X,Y], outputs=test_back_prop, allow_input
 # BEGIN TOY PROBLEM
 corpus = 'mary had a little lamb whose fleece was white as snow'.split(' ')
 corpus_len = len(corpus)
-for _ in range(10):
+for _ in range(1000):
     total_cost = 0.
     for c in corpus:
         for i in range(len(c)-1):
-            total_cost += back_prop(wh.char2id(c[i]),wh.char2id(c[i+1]))
-        total_cost += back_prop(wh.char2id(c[-1]),wh.EOS)
+            total_cost += back_prop(wh.char2id(c[i]),wh.id2onehot(wh.char2id(c[i+1])))
+        total_cost += back_prop(wh.char2id(c[-1]),wh.id2onehot(wh.EOS))
     print("Completed iteration:",_,"Cost: ",total_cost/corpus_len)
         
 print("Training complete")
@@ -145,55 +140,10 @@ seed = 'm'
 output = [seed]
 for _ in range(30):
     p = predict(wh.char2id(seed))
-    letter = wh.id2char(p[0])
+    letter = wh.id2char(np.argmax(p,axis=1))
     output.append(letter)
     seed = letter
 
 print("prediction:",output)
       
     
-
-##preds,updates = theano.scan(fn=lambda prior_result, X: predict(prior_result),
-##                              outputs_info=T.ones_like(X),
-##                              non_sequences=X,
-##                              n_steps=max_len)
-##params = [theta,states]
-##update = RMSprop(cost,params,lr=0.01)
-##
-##
-##start_time = timeit.default_timer()
-##print('Optimizing using RMSProp...')
-##
-##for i in range(10000):
-##
-##    c = 0.
-##    for _ in range(TRAIN_BATCHES):
-##        train_input,actual = genRandBatch()
-##        for j in range(len(new_batch[0])):
-##            # Train 1 letter at a time
-##            train(train_input[j])
-##        pred = predict(EOS)
-##        c += learn(EOS,actual)
-##    c /= TRAIN_BATCHES
-##    
-##    fox_pred = ''
-##    for _ in range(4):
-##        for f in fox[_][0]:
-##            fox_pred += id2char(predict(f)[0])
-##        fox_pred += ' '
-##    print('Completed iteration ',i,', Cost: ',c,'Fox Validation:',fox_pred)#'Input:',str_input,'True:',str_true,
-##    
-##    if not i % 100:
-##        ss,so,hss,hso,h2ss,h2so,h3ss,h3so = get_states(0)
-##        print('saved_output',so[:,0])
-##        pickle_save(theta.eval(),'theta.pkl')
-##        s = packStates(ss,so,hss,hso,h2ss,h2so,h3ss,h3so)
-##        pickle_save(s,'states.pkl')
-##
-##
-##end_time = timeit.default_timer()
-##print('The code ran for %.1fs' % ((end_time - start_time)))
-##
-##
-##
-##

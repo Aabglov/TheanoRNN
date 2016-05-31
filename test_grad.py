@@ -23,19 +23,23 @@ def RMSprop(cost, params, lr=0.001, rho=0.9, epsilon=1e-6):
     return updates
 
 class model:
-    def __init__(self,vocab_size,embed_size,batch_size):
+    def __init__(self,vocab_size,embed_size,batch_size,hidden_size):
         self.embed_layer = layer.EmbedLayer(vocab_size,embed_size,batch_size)
         self.batch_size = batch_size
         self.embed_size = embed_size
         self.vocab_size = vocab_size
-        self.w = layer.init_weights(embed_size,1,'w')
-        self.params = self.embed_layer.update_params + [self.w]
+        self.hidden_layer = layer.LSTMLayer(hidden_size,vocab_size,batch_size,'hidden_layer_0')
+        self.softmax_layer = layer.LinearLayer(vocab_size,1)
+        #self.w = layer.init_weights(hidden_size,1,'w')
+        self.params = self.embed_layer.update_params + self.hidden_layer.update_params + self.softmax_layer.update_params #+  [self.w]
     def forward_prop(self,X):
         o = self.embed_layer.forward_prop(X)
-        return T.dot(o,self.w)
+        o = self.hidden_layer.forward_prop(o)
+        o = self.softmax_layer.forward_prop(o)
+        return o
 
 
-net = model(10,25,1)
+net = model(10,25,1,25)
 y = net.forward_prop(X)
 cost = T.mean(T.sqr(y - Y))
 params = net.params#[net.w,net.w2]

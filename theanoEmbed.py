@@ -41,6 +41,7 @@ X = T.iscalar('x')
 E = T.vector('embedded_X')
 #Y = T.iscalar('y')
 Y = T.imatrix('y')
+LR = T.scalar('learning_rate')
 
 # BATCHES
 TRAIN_BATCHES = 1000
@@ -105,7 +106,7 @@ class RNN:
     
 fox = wh.initFox()
 
-nodes = [512]
+nodes = [10]
 
 # GET DATA
 #train_set_x,train_set_y,test_set_x,test_set_y,valid_set_x,valid_set_y = load(hot=False,words=True)
@@ -116,11 +117,11 @@ y_pred = rnn.forward_prop(X)
 
 cost = T.nnet.categorical_crossentropy(y_pred,Y).mean() #T.mean((y_pred - Y) ** 2)
 params = rnn.update_params
-updates = RMSprop(cost,params,lr=0.003)
+updates = RMSprop(cost,params,lr=LR)
 test_back_prop = updates[0]
 
 predict = theano.function(inputs=[X], outputs = y_pred, allow_input_downcast=True)
-back_prop = theano.function(inputs=[X,Y], outputs=cost, updates=updates, allow_input_downcast=True)
+back_prop = theano.function(inputs=[X,Y,LR], outputs=cost, updates=updates, allow_input_downcast=True)
 
 test_updates = theano.function(inputs=[X,Y], outputs=test_back_prop, allow_input_downcast=True,on_unused_input='warn')
 
@@ -141,13 +142,19 @@ test_updates = theano.function(inputs=[X,Y], outputs=test_back_prop, allow_input
 corpus = 'the quick brown fox'
 corpus_len = len(corpus)
 
-for _ in range(1000):
+lr = 0.2
+decay_epoch = 1000
+decay_rate = 0.5
+
+for _ in range(10000):
     total_cost = 0.
     for i in range(corpus_len-1):
         c = corpus[i]
         c_next = corpus[i+1]
-        total_cost += back_prop(wh.char2id(c),wh.id2onehot(wh.char2id(c_next)))
-    print("Completed iteration:",_,"Cost: ",total_cost/corpus_len)
+        total_cost += back_prop(wh.char2id(c),wh.id2onehot(wh.char2id(c_next)),lr)
+    print("Completed iteration:",_,"Cost: ",total_cost/corpus_len,"Learning Rate:",lr)
+    if not _ % decay_epoch:
+        lr *= decay_rate
         
 print("Training complete")
 seed = corpus[0]

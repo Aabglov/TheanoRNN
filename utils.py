@@ -47,6 +47,30 @@ def castInt(data):
 def init_weights(shape,name):
     return theano.shared(floatX(np.random.randn(*shape)*0.01),name=name,borrow=True)
 
+# Ortho init -- Stolen from: https://github.com/mila-udem/blocks/blob/master/blocks/initialization.py
+# UNTESTED!
+def ortho_init_weights(shape,name):
+    if shape[0] == shape[1]:
+        # For square weight matrices we can simplify the logic
+        # and be more exact:
+        M = srng.randn(*shape).astype(theano.config.floatX)
+        Q, R = np.linalg.qr(M)
+        Q = Q * np.sign(np.diag(R))
+        return Q
+
+    M1 = srng.randn(shape[0], shape[0]).astype(theano.config.floatX)
+    M2 = srng.randn(shape[1], shape[1]).astype(theano.config.floatX)
+
+    # QR decomposition of matrix with entries in N(0, 1) is random
+    Q1, R1 = np.linalg.qr(M1)
+    Q2, R2 = np.linalg.qr(M2)
+    # Correct that NumPy doesn't force diagonal of R to be non-negative
+    Q1 = Q1 * np.sign(np.diag(R1))
+    Q2 = Q2 * np.sign(np.diag(R2))
+    n_min = min(shape[0], shape[1])
+    weight_mat = np.dot(Q1[:, :n_min], Q2[:n_min, :])
+    return theano.shared(floatX(weight_mat),name=name,borrow=True)
+
 # PROCESSING HELPERS
 def rectify(X):
     return T.maximum(X,0.)

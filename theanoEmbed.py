@@ -1,6 +1,5 @@
 ###############################################################
-#                        LBFGS THEANO
-#                        No more fucking around
+#                        RNN THEANO
 ###############################################################
 
 # THEANO
@@ -106,7 +105,7 @@ class RNN:
     
 fox = wh.initFox()
 
-nodes = [10]
+nodes = [10,10,10]
 
 # GET DATA
 #train_set_x,train_set_y,test_set_x,test_set_y,valid_set_x,valid_set_y = load(hot=False,words=True)
@@ -125,26 +124,20 @@ back_prop = theano.function(inputs=[X,Y,LR], outputs=cost, updates=updates, allo
 
 test_updates = theano.function(inputs=[X,Y], outputs=test_back_prop, allow_input_downcast=True,on_unused_input='warn')
 
+
 # BEGIN TOY PROBLEM
-#corpus = [x for x in utils.read_data("/Users/keganrabil/Desktop/text8.zip").split(" ") if x]
-#print("Corpus Loaded")
-#corpus_len = 1000 #len(corpus)
-##for _ in range(1000):
-##    total_cost = 0.
-##    random.shuffle(corpus)
-##    for c in corpus[:corpus_len]:
-##        for i in range(len(c)-1):
-##            total_cost += back_prop(wh.char2id(c[i]),wh.id2onehot(wh.char2id(c[i+1])))
-##        total_cost += back_prop(wh.char2id(c[-1]),wh.id2onehot(wh.EOS))
-##    print("Completed iteration:",_,"Cost: ",total_cost/corpus_len)
-
-
 corpus = 'the quick brown fox'
 corpus_len = len(corpus)
 
-lr = 0.2
 decay_epoch = 1000
-decay_rate = 0.5
+
+if len(sys.argv) > 1:
+    lr = float(sys.argv[1])
+    if len(sys.argv) > 2:
+        decay_rate = float(sys.argv[2])
+else:
+    lr = 0.1
+    decay_rate = 0.33
 
 for _ in range(10000):
     total_cost = 0.
@@ -167,4 +160,16 @@ for _ in range(len(corpus)-1):
 
 print("prediction:",output)
       
-    
+#corpus = [x for x in utils.read_data("/Users/keganrabil/Desktop/text8.zip").split(" ") if x]
+#print("Corpus Loaded")
+#corpus_len = 1000 #len(corpus)
+##for _ in range(1000):
+##    total_cost = 0.
+##    random.shuffle(corpus)
+##    for c in corpus[:corpus_len]:
+##        for i in range(len(c)-1):
+##            total_cost += back_prop(wh.char2id(c[i]),wh.id2onehot(wh.char2id(c[i+1])))
+##        total_cost += back_prop(wh.char2id(c[-1]),wh.id2onehot(wh.EOS))
+##    print("Completed iteration:",_,"Cost: ",total_cost/corpus_len)
+
+

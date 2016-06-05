@@ -1,8 +1,3 @@
-###############################################################
-#                        LBFGS THEANO
-#                        No more fucking around
-###############################################################
-
 # THEANO
 import numpy as np
 from utils import castInt,castData

@@ -1,8 +1,4 @@
 ###############################################################
-#                        LBFGS THEANO
-#                        No more fucking around
-###############################################################
-
 # THEANO
 import numpy as np
 import theano

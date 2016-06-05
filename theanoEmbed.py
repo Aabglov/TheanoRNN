@@ -15,7 +15,6 @@ import timeit
 import sys
 import zipfile
 import string
-#from six.moves import range
 from six.moves.urllib.request import urlretrieve
 
 # SCIPY

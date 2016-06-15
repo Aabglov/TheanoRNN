@@ -4,7 +4,7 @@ import theano
 import theano.tensor as T
 import pickle
 import random
-from utils import floatX
+from utils import floatX,dropout
 
 # SCIPY
 import random
@@ -31,7 +31,7 @@ class EmbedLayer:
         self.embed = self.embed_matrix[X].reshape((self.batch_size,self.y))
         return self.embed
 
-class LSTMLayer:
+class LSTMLayerOld:
     def __init__(self,input_size,output_size,batch_size,name):
         self.x = input_size
         self.y = output_size
@@ -56,6 +56,12 @@ class LSTMLayer:
         previous state and the gates."""
         n = self.y
         i_mul = T.dot(F,self.x_all)
+
+        # Implementing dropout for regularization via:
+        # https://arxiv.org/pdf/1409.2329.pdf
+        if self.dropout > 0:
+            self.saved_output = dropout(self.saved_output)
+            
         o_mul = T.dot(self.saved_output,self.m_all)
 
         ix_mul = i_mul[:,:n]# tf.matmul(i, ix)
@@ -75,7 +81,50 @@ class LSTMLayer:
         output_gate = T.nnet.sigmoid(ox_mul + om_mul + self.ob)
         self.saved_output = output_gate * T.tanh(self.saved_state)
         return self.saved_output
+
+class LSTMLayer:
+    def __init__(self,input_size,output_size,batch_size,name):
+        self.x = input_size
+        self.y = output_size
+        # LSTM cell weights
+        self.wi = init_weights(input_size+output_size,output_size,'{}_wi'.format(name))
+        self.wf = init_weights(input_size+output_size,output_size,'{}_wf'.format(name))
+        self.wc = init_weights(input_size+output_size,output_size,'{}_wc'.format(name))
+        self.wo = init_weights(input_size+output_size,output_size,'{}_wo'.format(name))
+        # LSTM cell biases
+        self.bi = init_weights(1,output_size,'{}_ib'.format(name))
+        self.bf = init_weights(1,output_size,'{}_fb'.format(name))
+        self.bc = init_weights(1,output_size,'{}_cb'.format(name))
+        self.bo = init_weights(1,output_size,'{}_ob'.format(name))
+        # Saved state and output
+        self.saved_state = init_weights(batch_size,output_size,'{}_ss'.format(name))
+        self.saved_output = init_weights(batch_size,output_size,'{}_so'.format(name))
+        # Variables updated through back-prop
+        self.update_params = [self.wi,self.wf,self.wc,self.wo,self.bi,self.bf,self.bc,self.bo,self.saved_state,self.saved_output] # Should state be included?
+
+    # Expects embedded input
+    def forward_prop(self,F):
+        """Create a LSTM cell. See e.g.: http://arxiv.org/pdf/1402.1128v1.pdf
+        Note that in this formulation, we omit the various connections between the
+        previous state and the gates."""
+
+        # Implementing dropout for regularization via:
+        # https://arxiv.org/pdf/1409.2329.pdf
+        if self.dropout > 0:
+            self.saved_output = dropout(self.saved_output)
+
+        # since we use this everywhere we just make it a variable
+        inner_concat = T.concatenate([self.saved_output,F],axis=1)
         
+        forget_gate = T.nnet.sigmoid(T.dot(inner_concat,self.wf) + self.bf)
+        input_gate = T.nnet.sigmoid(T.dot(inner_concat,self.wi)  + self.bi)
+        update_gate = T.tanh(T.dot(inner_concat,self.wc) + self.bc)
+        output_gate = T.nnet.sigmoid(T.dot(inner_concat,self.wo)+ self.bo)
+        
+        self.saved_state = (forget_gate * self.saved_state) + (input_gate * update_gate)
+        self.saved_output = output_gate * T.tanh(self.saved_state)
+        return self.saved_output
+       
 class SoftmaxLayer:
     def __init__(self,input_size,vocab_size):
         self.x = input_size

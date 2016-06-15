@@ -17,10 +17,9 @@ import zipfile
 import string
 from six.moves.urllib.request import urlretrieve
 
-# SCIPY
+# MATH
 import random
 from math import e,log,sqrt
-import scipy.optimize
 
 # LAYERS
 from layer import EmbedLayer,LSTMLayer,LinearLayer,SoftmaxLayer
@@ -71,7 +70,7 @@ def RMSprop(cost, params, lr=0.001, rho=0.9, epsilon=1e-6):
     return updates
 
 class RNN:
-    def __init__(self,vocab_size,embed_size,output_size,hidden_layer_sizes,batch_size):
+    def __init__(self,vocab_size,embed_size,output_size,hidden_layer_sizes,batch_size,dropout=None):
         self.embed_layer = EmbedLayer(vocab_size,embed_size,batch_size)
         self.batch_size = batch_size
         self.embed_size = embed_size
@@ -88,8 +87,14 @@ class RNN:
                                        layer_sizes[i+1],
                                        batch_size,
                                        name))
-            # Add the update parameters to the rnn class
+            # Dropout - if provided
             hl = getattr(self,name)
+            if dropout is not None:
+                hl.dropout = dropout
+            else:
+                hl.dropout = 0
+                
+            # Add the update parameters to the rnn class
             self.update_params += hl.update_params
         self.output_layer = SoftmaxLayer(output_size,vocab_size)
         self.update_params += self.output_layer.update_params
@@ -104,7 +109,7 @@ class RNN:
     
 fox = wh.initFox()
 
-nodes = [10,10,10]
+nodes = [10]
 
 # GET DATA
 #train_set_x,train_set_y,test_set_x,test_set_y,valid_set_x,valid_set_y = load(hot=False,words=True)
@@ -123,10 +128,19 @@ back_prop = theano.function(inputs=[X,Y,LR], outputs=cost, updates=updates, allo
 
 test_updates = theano.function(inputs=[X,Y], outputs=test_back_prop, allow_input_downcast=True,on_unused_input='warn')
 
-
 # BEGIN TOY PROBLEM
-corpus = 'the quick brown fox'
+corpus = 'thequickbrownfoxjumpedoverthelazydog'
 corpus_len = len(corpus)
+
+def predictTest():
+    seed = corpus[0]
+    output = [seed]
+    for _ in range(len(corpus)-1):
+        p = predict(wh.char2id(seed))
+        letter = wh.id2char(np.argmax(p,axis=1))
+        output.append(letter)
+        seed = letter
+    print("prediction:",''.join(output))
 
 decay_epoch = 1000
 
@@ -147,17 +161,11 @@ for _ in range(10000):
     print("Completed iteration:",_,"Cost: ",total_cost/corpus_len,"Learning Rate:",lr)
     if not _ % decay_epoch:
         lr *= decay_rate
+    if not _ % 100:
+        predictTest()
         
 print("Training complete")
-seed = corpus[0]
-output = [seed]
-for _ in range(len(corpus)-1):
-    p = predict(wh.char2id(seed))
-    letter = wh.id2char(np.argmax(p,axis=1))
-    output.append(letter)
-    seed = letter
-
-print("prediction:",output)
+predictTest()
       
 #corpus = [x for x in utils.read_data("/Users/keganrabil/Desktop/text8.zip").split(" ") if x]
 #print("Corpus Loaded")

@@ -9,7 +9,6 @@ from utils import floatX,dropout
 # SCIPY
 import random
 
-
 X = T.iscalar('x')
 F = T.vector('f')
 
@@ -20,9 +19,26 @@ def init_weights(x,y,name):
 def init_zeros(x,y,name):
     return theano.shared(floatX(np.zeros((x,y))),name=name,borrow=True)
 
+# Not technically a layer, but included here
+# for symmetry in the RNN class
+class OneHot: 
+    def __init__(self,vocab_size,batch_size):
+        self.x = vocab_size
+        self.y = vocab_size
+        self.batch_size = batch_size
+        self.one_hot_matrix = theano.shared(floatX(np.eye(self.x)),name='one_hot',borrow=True)
+        # Variables updated through back-prop
+        self.update_params = [] # Placeholders
+        # Used in Adagrad calculation
+        self.memory_params = [] # Placeholders
+        
+    def forward_prop(self,X):
+        return self.one_hot_matrix[X].reshape((self.batch_size,self.x))
+
+    
 class EmbedLayer:
     def __init__(self,vocab_size,embed_size,batch_size):
-        self.x = vocab_size+1 # Note we use vocab_size + 1 to account for the EOS (End-of-Sequence) Symbol
+        self.x = vocab_size
         self.y = embed_size
         self.batch_size = batch_size
         self.embed_matrix = init_weights(self.x,self.y,'embed')
@@ -37,9 +53,14 @@ class EmbedLayer:
         return self.embed
 
 class LSTMLayer:
-    def __init__(self,input_size,output_size,batch_size,name):
+    def __init__(self,input_size,output_size,batch_size,name,dropout=None):
         self.x = input_size
         self.y = output_size
+        self.batch_size = batch_size
+        if dropout is None:
+            self.dropout = 0
+        else:
+            self.dropout = dropout
         # LSTM cell weights
         self.wi = init_weights(input_size+output_size,output_size,'{}_wi'.format(name))
         self.wf = init_weights(input_size+output_size,output_size,'{}_wf'.format(name))
@@ -54,7 +75,7 @@ class LSTMLayer:
         self.saved_state = init_weights(batch_size,output_size,'{}_ss'.format(name))
         self.saved_output = init_weights(batch_size,output_size,'{}_so'.format(name))
         # Variables updated through back-prop
-        self.update_params = [self.wi,self.wf,self.wc,self.wo,self.bi,self.bf,self.bc,self.bo,self.saved_state,self.saved_output] 
+        self.update_params = [self.wi,self.wf,self.wc,self.wo,self.bi,self.bf,self.bc,self.bo,self.saved_state] 
         # Used in Adagrad calculation
         self.mwi = init_zeros(input_size+output_size,output_size,'m_{}_wi'.format(name))
         self.mwf = init_zeros(input_size+output_size,output_size,'m_{}_wf'.format(name))
@@ -66,7 +87,7 @@ class LSTMLayer:
         self.mbo = init_zeros(1,output_size,'m_{}_ob'.format(name))
         self.m_saved_state = init_zeros(batch_size,output_size,'m_{}_ss'.format(name))
         self.m_saved_output = init_zeros(batch_size,output_size,'m_{}_so'.format(name))
-        self.memory_params = [self.mwi,self.mwf,self.mwc,self.mwo,self.mbi,self.mbf,self.mbc,self.mbo,self.m_saved_state,self.m_saved_output]
+        self.memory_params = [self.mwi,self.mwf,self.mwc,self.mwo,self.mbi,self.mbf,self.mbc,self.mbo,self.m_saved_state]
         
     # Expects embedded input
     def forward_prop(self,F):
@@ -126,7 +147,7 @@ class SoftmaxLayer:
     def forward_prop(self,F):
         self.pyx = T.dot(F,self.w) + self.b
         self.pred = T.nnet.softmax(self.pyx)
-        return self.pred
+        return self.pred[0]
 
 
 

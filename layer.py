@@ -112,6 +112,32 @@ class LSTMLayer:
         self.saved_output = output_gate * T.tanh(self.saved_state)
         return self.saved_output
 
+class RecurrentLayer:
+    def __init__(self,input_size,output_size,batch_size,name):
+        self.x = input_size
+        self.y = output_size
+        self.batch_size = batch_size
+        # Weights
+        self.wx = init_weights(input_size,output_size,'{}_wx'.format(name))
+        self.wh = init_weights(output_size,output_size,'{}_wh'.format(name))
+        # Biases - init with 0
+        self.bh = init_zeros(1,output_size,'{}_bh'.format(name))
+        # Saved state and output
+        self.hidden_state = init_weights(batch_size,output_size,'{}_hs'.format(name))
+        # Variables updated through back-prop
+        self.update_params = [self.wx,self.wh,self.bh] 
+        # Used in Adagrad calculation
+        self.mwx = init_zeros(input_size,output_size,'m_{}_wx'.format(name))
+        self.mwh = init_zeros(output_size,output_size,'m_{}_wh'.format(name))
+        self.mbh = init_zeros(1,output_size,'m_{}_bh'.format(name))
+        #self.m_hidden_state = init_zeros(batch_size,output_size,'m_{}_hs'.format(name))
+        self.memory_params = [self.mwx,self.mwh,self.mbh] 
+        
+    # Expects embedded input
+    def forward_prop(self,F):
+        self.hidden_state = T.tanh(T.dot(F,self.wx) + T.dot(self.hidden_state,self.wh) + self.bh)
+        return self.hidden_state
+
 class LinearLayer:
     def __init__(self,input_size,output_size,name):
         self.x = input_size
@@ -145,9 +171,9 @@ class SoftmaxLayer:
     
      # Expects saved output from last LSTM layer
     def forward_prop(self,F):
-        self.pyx = T.dot(F,self.w) + self.b
-        self.pred = T.nnet.softmax(self.pyx)
-        return self.pred[0]
+        self.pyx = (T.dot(F,self.w) + self.b)
+        self.pred = T.nnet.softmax(self.pyx).ravel()
+        return self.pred
 
 
 

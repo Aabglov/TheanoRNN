@@ -22,7 +22,7 @@ import random
 from math import e,log,sqrt
 
 # LAYERS
-from layer import OneHot,EmbedLayer,LSTMLayer,LinearLayer,SoftmaxLayer
+from layer import OneHot,EmbedLayer,LSTMLayer,RecurrentLayer,LinearLayer,SoftmaxLayer
 
 # HELPERS
 from wordHelpers import WordHelper
@@ -34,9 +34,9 @@ srng = RandomStreams()
 # CONSTANTS
 
 # VARIABLES INIT
-X_LIST = T.ivector('x_list')
+X_LIST = T.imatrix('x_list')
 Y_LIST = T.imatrix('y_list')
-X = T.iscalar('x')
+X = T.ivector('x')
 Y = T.ivector('y')
 LR = T.scalar('learning_rate')
 
@@ -48,7 +48,7 @@ LR = T.scalar('learning_rate')
 with open('input.txt','r') as f:
     data = f.read()
 f.close()
-corpus = data.lower()
+corpus = data#.lower()
 corpus_len = len(corpus)
 print("data loaded: {}".format(corpus_len))
 
@@ -77,25 +77,12 @@ if len(sys.argv) > 1:
     if len(sys.argv) > 2:
         decay_rate = float(sys.argv[2])
 else:
-    lr = 0.3
+    lr = 0.1
     decay_rate = 1.0#0.33
     
 ####################################################################################################
 # MODEL AND OPTIMIZATION
 ######################################################################
-
-def RMSprop(cost, params, lr=0.001, rho=0.9, epsilon=1e-6):
-    grads = T.grad(cost=cost, wrt=params)
-    updates = []
-    for p, g in zip(params, grads):
-        acc = theano.shared(p.get_value() * 0.)
-        acc_new = rho * acc + (1 - rho) * g ** 2
-        gradient_scaling = T.sqrt(acc_new + epsilon)
-        g = g / gradient_scaling
-        g = T.clip(g,-5.,5)
-        updates.append((acc, acc_new))
-        updates.append((p, p - lr * g))
-    return updates
 
 # RMSprop is for NERDS
 def Adagrad(cost, params, mem, lr=1e-1):
@@ -103,9 +90,9 @@ def Adagrad(cost, params, mem, lr=1e-1):
     updates = []
     for p,g,m in zip(params, grads, mem):
         g = T.clip(g,-5.,5)
-        new_m = m + g * g
+        new_m = m + T.sqr(g)#(g * g)
         updates.append((m,new_m))
-        updates.append((p, p - lr * g / np.sqrt(new_m + 1e-8)))
+        updates.append((p, p - (lr * g) / np.sqrt(new_m + 1e-8)))
     return updates
 
 ##class RNN:
@@ -154,18 +141,18 @@ class RNN:
         self.vocab_size = vocab_size
         # Input Layer
         #self.input_layer = EmbedLayer(vocab_size,embed_size,batch_size)
-        self.input_layer = OneHot(vocab_size,batch_size)
+        #self.input_layer = OneHot(vocab_size,batch_size)
         # Hidden layer
-        self.hidden_layer = LSTMLayer(vocab_size,hidden_layer_size,batch_size,'h',dropout)
+        self.hidden_layer = RecurrentLayer(vocab_size,hidden_layer_size,batch_size,'h')
         # Output Layer
         self.output_layer = SoftmaxLayer(hidden_layer_size,vocab_size)
         # Update Parameters - Backprop
-        self.update_params = self.input_layer.update_params + \
-                             self.hidden_layer.update_params + \
+        #self.update_params = self.input_layer.update_params + \
+        self.update_params = self.hidden_layer.update_params + \
                              self.output_layer.update_params
         # Memory Parameters for Adagrad
-        self.memory_params = self.input_layer.memory_params + \
-                             self.hidden_layer.memory_params + \
+        #self.memory_params = self.input_layer.memory_params + \
+        self.memory_params = self.hidden_layer.memory_params + \
                              self.output_layer.memory_params
         
 ##    def forward_prop(self,X):
@@ -175,10 +162,10 @@ class RNN:
 ##        return pred
 
     def calc_cost(self,X,Y):
-        o = self.input_layer.forward_prop(X)
-        o = self.hidden_layer.forward_prop(o)
+        #o = self.input_layer.forward_prop(X)
+        o = self.hidden_layer.forward_prop(X)
         pred = self.output_layer.forward_prop(o)
-        cost = T.nnet.categorical_crossentropy(pred,Y).mean()
+        cost = T.nnet.categorical_crossentropy(pred,Y).sum()
         return cost,pred
     
 nodes = [100]
@@ -204,7 +191,7 @@ updates = Adagrad(scan_cost,params,memory_params,lr=LR)
 back_prop = theano.function(inputs=[X_LIST,Y_LIST,LR], outputs=scan_cost, updates=updates)
 
 y_pred = y_preds[-1]
-predict = theano.function(inputs=[X_LIST,Y_LIST], outputs=y_pred, allow_input_downcast=True)
+predict = theano.function(inputs=[X_LIST,Y_LIST], outputs=y_pred, updates=None, allow_input_downcast=True)
 
 #test_updates = theano.function(inputs=[X,Y], outputs=test_back_prop, allow_input_downcast=True,on_unused_input='warn')
 print("Model initialized, beginning training")
@@ -213,7 +200,7 @@ def predictTest():
     seed = corpus[0]
     output = [seed]
     for _ in range(seq_length):
-        pred_input = [wh.char2id(seed)]
+        pred_input = [wh.id2onehot(wh.char2id(seed))]
         pred_output_UNUSED = [wh.id2onehot(wh.char2id(seed))] # This value is only used to trigger the calc_cost.  It's incorrect, but it doesn't update the parameters to that's okay. Not great, but okay.
         p = predict(pred_input,pred_output_UNUSED)
         # Changed from argmax to random_choice - should introduce more variance - good for learnin'
@@ -222,30 +209,63 @@ def predictTest():
         seed = letter
     print("prediction:",''.join(output))
 
-for _ in range(n_epochs):
-    smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
-    loss = 0
-    for i in range(num_batches-1):
-        s1 = i * seq_length
-        s2 = (i+1) * seq_length
-        c_input = corpus[s1:s2]
-        c_output = corpus[s1+1:s2+1]
-        
-        batch_input = []
-        batch_output = []
-        for j in range(len(c_input)):
-            c = c_input[j]
-            c2 = c_output[j]
-            batch_input.append(wh.char2id(c))
-            batch_output.append(wh.id2onehot(wh.char2id(c2)))
-            
-        loss += back_prop(batch_input,batch_output,lr)
-        smooth_loss = smooth_loss * 0.999 + loss * 0.001
-    if not _ % decay_epoch:
-        lr *= decay_rate
-    if not _ % 10:
-        print("Completed iteration:",_,"Cost: ",smooth_loss,"Learning Rate:",lr)
+smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
+n = 0
+p = 0
+#for n in range(n_epochs):
+while True:
+    if p+seq_length+1 >= corpus_len or n == 0:
+        # Reset memory
+        rnn.hidden_layer.hidden_state *= 0.
+        p = 0 # go to beginning
+    p2 = p + seq_length
+    c_input = corpus[p:p2]
+    c_output = corpus[p+1:p2+1]
+    
+    batch_input = []
+    batch_output = []
+    for j in range(len(c_input)):
+        c = c_input[j]
+        c2 = c_output[j]
+        batch_input.append(wh.id2onehot(wh.char2id(c)))
+        batch_output.append(wh.id2onehot(wh.char2id(c2)))
+
+    loss = back_prop(batch_input,batch_output,lr)
+    smooth_loss = smooth_loss * 0.999 + loss * 0.001
+    if not n % 100:
+        print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)
         predictTest()
+
+    p += seq_length
+    n += 1
+
+##        
+##for n in range(n_epochs):    
+##    # Reset memory
+##    rnn.hidden_layer.hidden_state *= 0.
+##    
+##    for i in range(num_batches):
+##        s1 = i*seq_length
+##        s2 = (i+1)*seq_length 
+##        c_input = corpus[s1:s2]
+##        c_output = corpus[s1+1:s2+1]
+##        
+##        batch_input = []
+##        batch_output = []
+##        for j in range(len(c_input)):
+##            c = c_input[j]
+##            c2 = c_output[j]
+##            batch_input.append(wh.char2id(c))
+##            batch_output.append(wh.id2onehot(wh.char2id(c2)))
+##            
+##        loss = back_prop(batch_input,batch_output,lr)
+##        smooth_loss = smooth_loss * 0.999 + loss * 0.001
+##        if not i % 100:
+##            print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)
+##            predictTest()
+##    if not n % decay_epoch:
+##        lr *= decay_rate
+
  
 
 ## WORKING

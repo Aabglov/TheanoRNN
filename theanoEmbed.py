@@ -66,7 +66,7 @@ seq_length = 25
 num_batches = int(corpus_len/seq_length)
 
 # TRAINING PARAMS
-n_epochs = 1000
+n_epochs = 100000
 cur_epoch = 0
 cur_grad = 0.
 use_saved = False
@@ -77,7 +77,7 @@ if len(sys.argv) > 1:
     if len(sys.argv) > 2:
         decay_rate = float(sys.argv[2])
 else:
-    lr = 0.1
+    lr = 0.3
     decay_rate = 1.0#0.33
     
 ####################################################################################################

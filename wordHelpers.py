@@ -18,7 +18,7 @@ class WordHelper:
       self.eos_char = u'\xa4' # Arbitrary end-of-sequence tag, I think it looks cool
     else:
       self.eos_char = custom_eos
-    vocab += [self.eos_char]
+    #vocab += [self.eos_char]
     self.eos = -1
     self.vocab = vocab
     self.vocab_size = len(vocab)
@@ -28,13 +28,13 @@ class WordHelper:
     if char in self.vocab:
       return self.vocab.index(char)
     else:
-      return 0
+      return -1
     
   def id2char(self,dictid):
     if dictid != self.eos:
       return self.vocab[dictid]
     else:
-      return ' '
+      return self.eos_char
 
   # Word helpers
   def genRandWord(self):

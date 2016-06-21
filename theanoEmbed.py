@@ -35,9 +35,9 @@ srng = RandomStreams()
 
 # VARIABLES INIT
 X_LIST = T.imatrix('x_list')
-Y_LIST = T.imatrix('y_list')
+Y_LIST = T.ivector('y_list')
 X = T.ivector('x')
-Y = T.ivector('y')
+Y = T.iscalar('y')
 LR = T.scalar('learning_rate')
 
 
@@ -90,7 +90,7 @@ def Adagrad(cost, params, mem, lr=1e-1):
     updates = []
     for p,g,m in zip(params, grads, mem):
         g = T.clip(g,-5.,5)
-        new_m = m + T.sqr(g)#(g * g)
+        new_m = m + (g * g)
         updates.append((m,new_m))
         updates.append((p, p - (lr * g) / np.sqrt(new_m + 1e-8)))
     return updates
@@ -165,7 +165,8 @@ class RNN:
         #o = self.input_layer.forward_prop(X)
         o = self.hidden_layer.forward_prop(X)
         pred = self.output_layer.forward_prop(o)
-        cost = T.nnet.categorical_crossentropy(pred,Y).sum()
+        #cost = T.nnet.categorical_crossentropy(pred,Y).sum()
+        cost = -T.log(pred[Y])
         return cost,pred
     
 nodes = [100]
@@ -189,6 +190,8 @@ scan_results,y_preds = theano.scan(fn=rnn.calc_cost,
 scan_cost = T.sum(scan_results)
 updates = Adagrad(scan_cost,params,memory_params,lr=LR)
 back_prop = theano.function(inputs=[X_LIST,Y_LIST,LR], outputs=scan_cost, updates=updates)
+grads = T.grad(cost=scan_cost, wrt=params)
+test_grads  = theano.function(inputs=[X_LIST,Y_LIST], outputs=grads, updates=None, allow_input_downcast=True)
 
 y_pred = y_preds[-1]
 predict = theano.function(inputs=[X_LIST,Y_LIST], outputs=y_pred, updates=None, allow_input_downcast=True)
@@ -201,7 +204,7 @@ def predictTest():
     output = [seed]
     for _ in range(seq_length):
         pred_input = [wh.id2onehot(wh.char2id(seed))]
-        pred_output_UNUSED = [wh.id2onehot(wh.char2id(seed))] # This value is only used to trigger the calc_cost.  It's incorrect, but it doesn't update the parameters to that's okay. Not great, but okay.
+        pred_output_UNUSED = [wh.char2id(seed)] # This value is only used to trigger the calc_cost.  It's incorrect, but it doesn't update the parameters to that's okay. Not great, but okay.
         p = predict(pred_input,pred_output_UNUSED)
         # Changed from argmax to random_choice - should introduce more variance - good for learnin'
         letter = wh.id2char(np.random.choice(range(wh.vocab_size), p=p.ravel()))
@@ -228,8 +231,16 @@ while True:
         c = c_input[j]
         c2 = c_output[j]
         batch_input.append(wh.id2onehot(wh.char2id(c)))
-        batch_output.append(wh.id2onehot(wh.char2id(c2)))
+        batch_output.append(wh.char2id(c2))
 
+    grads = test_grads(batch_input,batch_output)
+    test = 0
+    for g in grads:
+        m = - (lr * g) / np.sqrt((g * g)+ 1e-8)
+        print m.shape
+        for r in m:
+            print r
+        derp
     loss = back_prop(batch_input,batch_output,lr)
     smooth_loss = smooth_loss * 0.999 + loss * 0.001
     if not n % 100:
@@ -238,53 +249,6 @@ while True:
 
     p += seq_length
     n += 1
-
-##        
-##for n in range(n_epochs):    
-##    # Reset memory
-##    rnn.hidden_layer.hidden_state *= 0.
-##    
-##    for i in range(num_batches):
-##        s1 = i*seq_length
-##        s2 = (i+1)*seq_length 
-##        c_input = corpus[s1:s2]
-##        c_output = corpus[s1+1:s2+1]
-##        
-##        batch_input = []
-##        batch_output = []
-##        for j in range(len(c_input)):
-##            c = c_input[j]
-##            c2 = c_output[j]
-##            batch_input.append(wh.char2id(c))
-##            batch_output.append(wh.id2onehot(wh.char2id(c2)))
-##            
-##        loss = back_prop(batch_input,batch_output,lr)
-##        smooth_loss = smooth_loss * 0.999 + loss * 0.001
-##        if not i % 100:
-##            print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)
-##            predictTest()
-##    if not n % decay_epoch:
-##        lr *= decay_rate
-
- 
-
-## WORKING
-##for _ in range(n_epochs):
-##    smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
-##    loss = 0
-##    for i in range(corpus_len-1):
-##        c = corpus[i]
-##        c_next = corpus[i+1]
-##        loss += back_prop(wh.char2id(c),wh.id2onehot(wh.char2id(c_next)),lr)
-##    smooth_loss = smooth_loss * 0.999 + loss * 0.001
-##    if not _ % decay_epoch:
-##        lr *= decay_rate
-##    if not _ % 1:
-##        print("Completed iteration:",_,"Cost: ",smooth_loss,"Learning Rate:",lr)
-##        predictTest()
-
-       
-
 
 
  

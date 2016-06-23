@@ -16,6 +16,9 @@ F = T.vector('f')
 def init_weights(x,y,name):
     return theano.shared(floatX(np.random.randn(x,y)*0.01),name=name,borrow=True)
 
+def init_weights_hidden(x,y,name):
+    return theano.shared(floatX(np.random.randn(x,y)*10.),name=name,borrow=True)
+
 def init_zeros(x,y,name):
     return theano.shared(floatX(np.zeros((x,y))),name=name,borrow=True)
 
@@ -88,7 +91,8 @@ class LSTMLayer:
         self.m_saved_state = init_zeros(batch_size,output_size,'m_{}_ss'.format(name))
         self.m_saved_output = init_zeros(batch_size,output_size,'m_{}_so'.format(name))
         self.memory_params = [self.mwi,self.mwf,self.mwc,self.mwo,self.mbi,self.mbf,self.mbc,self.mbo,self.m_saved_state]
-        
+
+
     # Expects embedded input
     def forward_prop(self,F):
         """Create a LSTM cell. See e.g.: http://arxiv.org/pdf/1402.1128v1.pdf
@@ -124,6 +128,7 @@ class RecurrentLayer:
         self.bh = init_zeros(1,output_size,'{}_bh'.format(name))
         # Saved state and output
         self.hidden_state = init_weights(batch_size,output_size,'{}_hs'.format(name))
+        self.reset = init_zeros(batch_size,output_size,'{}_reset'.format(name))
         # Variables updated through back-prop
         self.update_params = [self.wx,self.wh,self.bh] 
         # Used in Adagrad calculation
@@ -131,12 +136,15 @@ class RecurrentLayer:
         self.mwh = init_zeros(output_size,output_size,'m_{}_wh'.format(name))
         self.mbh = init_zeros(1,output_size,'m_{}_bh'.format(name))
         #self.m_hidden_state = init_zeros(batch_size,output_size,'m_{}_hs'.format(name))
-        self.memory_params = [self.mwx,self.mwh,self.mbh] 
+        self.memory_params = [self.mwx,self.mwh,self.mbh]
+
+    def reset_hidden(self):
+        self.hidden_state = self.hidden_state * self.reset
         
     # Expects embedded input
     def forward_prop(self,F):
-        self.hidden_state = T.tanh(T.dot(F,self.wx) + T.dot(self.hidden_state,self.wh) + self.bh)
-        return self.hidden_state
+        hidden_state = T.tanh(T.dot(F,self.wx) + T.dot(self.hidden_state,self.wh) + self.bh)
+        return hidden_state
 
 class LinearLayer:
     def __init__(self,input_size,output_size,name):
@@ -161,7 +169,7 @@ class SoftmaxLayer:
         self.x = input_size
         self.y = vocab_size
         self.w = init_weights(input_size,vocab_size,'w')
-        self.b = init_weights(1,vocab_size,'b')
+        self.b = init_zeros(1,vocab_size,'b')
         # Variables updated through back-prop
         self.update_params = [self.w,self.b]
         # Used in Adagrad calculation

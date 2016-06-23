@@ -102,7 +102,6 @@ while True:
   # forward seq_length characters through the net and fetch gradient
   loss, dWxh, dWhh, dWhy, dbh, dby, hprev, losses = lossFun(inputs, targets, hprev)
   smooth_loss = smooth_loss * 0.999 + loss * 0.001
-  if n % 100 == 0: print 'iter {}, loss: {}, losses: {}'.format(n, smooth_loss,losses) # print progress
   
   # perform parameter update with Adagrad
   for param, dparam, mem in zip([Wxh, Whh, Why, bh, by], 
@@ -111,5 +110,10 @@ while True:
     mem += dparam * dparam
     param += -learning_rate * dparam / np.sqrt(mem + 1e-8) # adagrad update
 
+  if n % 100 == 0:
+    print hprev
+    print 'iter {}, loss: {}'.format(n, smooth_loss) # print progress
+
   p += seq_length # move data pointer
   n += 1 # iteration counter
+

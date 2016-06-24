@@ -16,6 +16,7 @@ import sys
 import zipfile
 import string
 from six.moves.urllib.request import urlretrieve
+import copy
 
 # MATH
 import random
@@ -39,7 +40,7 @@ Y_LIST = T.imatrix('y_list')
 X = T.ivector('x')
 Y = T.ivector('y')
 LR = T.scalar('learning_rate')
-
+H = T.matrix('hidden_update')
 
 
 # LOAD DATA
@@ -155,21 +156,13 @@ class RNN:
         self.memory_params = self.hidden_layer.memory_params + \
                              self.output_layer.memory_params
 
-        self.new_hidden_state = T.zeros_like(self.hidden_layer.hidden_state)
-
-        self.update_hidden = theano.function(inputs=[], outputs=None,updates=self.hidden_updates(), allow_input_downcast=True)
-
-    def hidden_updates(self,new_hidden_state):
-        return [(self.hidden_layer.hidden_state,self.new_hidden_state)]
-
-    def calc_cost(self,X,Y):
+    def calc_cost(self,X,Y,H):
         #o = self.input_layer.forward_prop(X)
-        self.new_hidden_state = self.hidden_layer.forward_prop(X)
-        self.update_hidden()
-        pred = self.output_layer.forward_prop(self.new_hidden_state)
-        cost = T.nnet.categorical_crossentropy(pred,Y).sum()
+        H = self.hidden_layer.forward_prop(X,H)
+        pred = self.output_layer.forward_prop(H)
+        cost = T.nnet.categorical_crossentropy(pred,Y).mean()
         #cost = -T.log(pred[Y])
-        return cost,pred
+        return cost,pred,H
     
 nodes = [100]
 
@@ -187,37 +180,45 @@ memory_params = [memory_params[i] for i in new_order]
 ##updates = Adagrad(cost,params,memory_params,lr=LR)
 ##back_prop = theano.function(inputs=[X,Y,LR], outputs=cost, updates=updates, allow_input_downcast=True,on_unused_input='warn')
 
-scan_results,y_preds = theano.scan(fn=rnn.calc_cost,
-                              #outputs_info=None,
-                              sequences=[X_LIST,Y_LIST]
+#hidden_update = T.as_tensor_variable(np.zeros(rnn.hidden_layer.hidden_state_shape))
+scan_results,y_preds,hiddens = theano.scan(fn=rnn.calc_cost,
+                              #outputs_info=hidden_update,
+                              sequences=[X_LIST,Y_LIST],
+                              non_sequences = H,
                             )[0] # only need the results, not the updates
 
 scan_cost = T.sum(scan_results)
-updates = Adagrad(scan_cost,params,memory_params,lr=LR)
-back_prop = theano.function(inputs=[X_LIST,Y_LIST,LR], outputs=scan_cost, updates=updates)
-grads = T.grad(cost=scan_cost, wrt=params)
-test_grads  = theano.function(inputs=[X_LIST,Y_LIST], outputs=grads, updates=None, allow_input_downcast=True)
+hidden_state = hiddens[-1]
+updates = Adagrad(scan_cost,params,memory_params)
+back_prop = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=[scan_cost,hidden_state], updates=updates)
+
+#grads = T.grad(cost=scan_cost, wrt=params)
+#test_grads  = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=grads, updates=None, allow_input_downcast=True)
 
 y_pred = y_preds[-1]
-predict = theano.function(inputs=[X_LIST,Y_LIST], outputs=y_pred, updates=None, allow_input_downcast=True)
+predict = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=[y_pred,hidden_state], updates=None, allow_input_downcast=True)
 
-reset_update = [(rnn.hidden_layer.hidden_state,rnn.hidden_layer.hidden_state*0)]
-reset_hidden = theano.function(inputs=[],outputs=None,updates=reset_update,allow_input_downcast=True)
+test_hidden = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=hiddens, updates=None, allow_input_downcast=True)
+
+#reset_update = [(rnn.hidden_layer.hidden_state,rnn.hidden_layer.hidden_state*0)]
+#reset_hidden = theano.function(inputs=[],outputs=None,updates=reset_update,allow_input_downcast=True)
 
 #test_updates = theano.function(inputs=[X,Y], outputs=test_back_prop, allow_input_downcast=True,on_unused_input='warn')
 print("Model initialized, beginning training")
 
-def predictTest():
+def predictTest(hs):
     seed = corpus[0]
     output = [seed]
+    hidden_state = copy.copy(hs)#np.zeros(rnn.hidden_layer.hidden_state_shape)
     for _ in range(seq_length):
         pred_input = [wh.id2onehot(wh.char2id(seed))]
-        pred_output_UNUSED = [wh.id2onehot(wh.char2id(seed))] # This value is only used to trigger the calc_cost.  It's incorrect, but it doesn't update the parameters to that's okay. Not great, but okay.
-        p = predict(pred_input,pred_output_UNUSED)
+        pred_output_UNUSED = [wh.id2onehot(wh.char2id(corpus[0]))] # This value is only used to trigger the calc_cost.  It's incorrect, but it doesn't update the parameters to that's okay. Not great, but okay.
+        p,hidden_state = predict(pred_input,pred_output_UNUSED,hidden_state)
         # Changed from argmax to random_choice - should introduce more variance - good for learnin'
         letter = wh.id2char(np.random.choice(range(wh.vocab_size), p=p.ravel()))
         output.append(letter)
         seed = letter
+        
     print("prediction:",''.join(output))
 
 smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
@@ -227,7 +228,7 @@ p = 0
 while True:
     if p+seq_length+1 >= corpus_len or n == 0:
         # Reset memory
-        rnn.hidden_layer.reset_hidden()
+        hidden_state = np.zeros(rnn.hidden_layer.hidden_state_shape)
         p = 0 # go to beginning
     p2 = p + seq_length
     c_input = corpus[p:p2]
@@ -241,20 +242,22 @@ while True:
         batch_input.append(wh.id2onehot(wh.char2id(c)))
         batch_output.append(wh.id2onehot(wh.char2id(c2)))
 
-    loss = back_prop(batch_input,batch_output,lr)
+    loss,hidden_state = back_prop(batch_input,batch_output,hidden_state)
     smooth_loss = smooth_loss * 0.999 + loss * 0.001
+
     if not n % 100:
         #print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)
-        predictTest()
-        #H = hidden(batch_input,batch_output)
-        #for h in H:
-            #print h.T
-        #grads = test_grads(batch_input,batch_output)
+        predictTest(hidden_state)
+#        H = test_hidden(batch_input,batch_output,hidden_state)
+#        for h in H:
+#            print h.ravel()
+        #grads = test_grads(batch_input,batch_output,hidden_state)
         #for g in grads:
+            #g = np.clip(g,-5.,5)
             #m = - (lr * g) / np.sqrt((g * g)+ 1e-8)
             #for r in m:
                 #print r
-            #print np.linalg.norm(g.T)
+            #print np.linalg.norm(g)
             #derp
         print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)
 

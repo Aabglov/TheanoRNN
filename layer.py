@@ -121,14 +121,15 @@ class RecurrentLayer:
         self.x = input_size
         self.y = output_size
         self.batch_size = batch_size
+        self.hidden_state_shape = (batch_size,output_size)
         # Weights
         self.wx = init_weights(input_size,output_size,'{}_wx'.format(name))
         self.wh = init_weights(output_size,output_size,'{}_wh'.format(name))
         # Biases - init with 0
         self.bh = init_zeros(1,output_size,'{}_bh'.format(name))
         # Saved state and output
-        self.hidden_state = init_weights(batch_size,output_size,'{}_hs'.format(name))
-        self.reset = init_zeros(batch_size,output_size,'{}_reset'.format(name))
+        #self.hidden_state = init_weights(batch_size,output_size,'{}_hs'.format(name))
+        #self.reset = init_zeros(batch_size,output_size,'{}_reset'.format(name))
         # Variables updated through back-prop
         self.update_params = [self.wx,self.wh,self.bh] 
         # Used in Adagrad calculation
@@ -137,13 +138,10 @@ class RecurrentLayer:
         self.mbh = init_zeros(1,output_size,'m_{}_bh'.format(name))
         #self.m_hidden_state = init_zeros(batch_size,output_size,'m_{}_hs'.format(name))
         self.memory_params = [self.mwx,self.mwh,self.mbh]
-
-    def reset_hidden(self):
-        self.hidden_state = self.hidden_state * self.reset
         
     # Expects embedded input
-    def forward_prop(self,F):
-        hidden_state = T.tanh(T.dot(F,self.wx) + T.dot(self.hidden_state,self.wh) + self.bh)
+    def forward_prop(self,F,H):
+        hidden_state = T.tanh(T.dot(F,self.wx) + T.dot(H,self.wh) + self.bh)
         return hidden_state
 
 class LinearLayer:

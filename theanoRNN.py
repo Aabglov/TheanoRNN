@@ -37,7 +37,7 @@ srng = RandomStreams()
 X = T.ivector('x')
 Y = T.ivector('y')
 LR = T.scalar('learning_rate')
-
+H = T.matrix('hidden_state')
 
 
 # LOAD DATA
@@ -83,7 +83,7 @@ else:
 ######################################################################
 
 # RMSprop is for NERDS
-def Adagrad(cost, params, mem, hidden_state, hidden_update, lr=1e-1):
+def Adagrad(cost, params, mem, lr=1e-1):
     grads = T.grad(cost=cost, wrt=params)
     updates = []
     for p,g,m in zip(params, grads, mem):
@@ -91,7 +91,6 @@ def Adagrad(cost, params, mem, hidden_state, hidden_update, lr=1e-1):
         new_m = m + (g * g)
         updates.append((m,new_m))
         updates.append((p, p - (lr * g) / T.sqrt(new_m + 1e-8)))
-    updates.append((hidden_state,hidden_update))
     return updates
 
 ##class RNN:
@@ -154,11 +153,11 @@ class RNN:
         self.memory_params = self.hidden_layer.memory_params + \
                              self.output_layer.memory_params
         
-    def forward_prop(self,X):
+    def forward_prop(self,X,H):
         #o = self.input_layer.forward_prop(X)
-        hidden_state = self.hidden_layer.forward_prop(X)
-        pred = self.output_layer.forward_prop(hidden_state)
-        return pred,hidden_state
+        H = self.hidden_layer.forward_prop(X,H)
+        pred = self.output_layer.forward_prop(H)
+        return pred,H
 
     def test_hidden(self,X):
         return self.hidden_layer.forward_prop(X)
@@ -172,16 +171,13 @@ nodes = [100]
 rnn = RNN(wh.vocab_size,nodes[0],batch_size)
 params = rnn.update_params
 memory_params = rnn.memory_params
-y_pred,hidden = rnn.forward_prop(X)
+y_pred,hidden = rnn.forward_prop(X,H)
 
 cost = T.nnet.categorical_crossentropy(y_pred,Y).mean() 
-updates = Adagrad(cost,params,memory_params,rnn.hidden_layer.hidden_state,hidden,lr=LR)
+updates = Adagrad(cost,params,memory_params,lr=LR)
 
-back_prop = theano.function(inputs=[X,Y,LR], outputs=cost, updates=updates, allow_input_downcast=True,on_unused_input='warn')
-predict = theano.function(inputs=[X], outputs=y_pred, updates=None, allow_input_downcast=True)
-
-reset_update = [(rnn.hidden_layer.hidden_state,rnn.hidden_layer.hidden_state*0)]
-reset_hidden = theano.function(inputs=[],outputs=None,updates=reset_update,allow_input_downcast=True)
+back_prop = theano.function(inputs=[X,Y,H,LR], outputs=[cost,hidden], updates=updates, allow_input_downcast=True,on_unused_input='warn')
+predict = theano.function(inputs=[X,H], outputs=[y_pred,hidden], updates=None, allow_input_downcast=True)
 
 #test_updates = theano.function(inputs=[X,Y], outputs=test_back_prop, allow_input_downcast=True,on_unused_input='warn')
 print("Model initialized, beginning training")
@@ -189,9 +185,10 @@ print("Model initialized, beginning training")
 def predictTest():
     seed = corpus[0]
     output = [seed]
+    hidden_state = np.zeros(rnn.hidden_layer.hidden_state_shape)
     for _ in range(seq_length):
         pred_input = wh.id2onehot(wh.char2id(seed)).ravel()
-        p = predict(pred_input)
+        p,hidden_state = predict(pred_input,hidden_state)
         # Changed from argmax to random_choice - should introduce more variance - good for learnin'
         letter = wh.id2char(np.random.choice(range(wh.vocab_size), p=p.ravel()))
         output.append(letter)
@@ -204,12 +201,12 @@ p = 0
 while True:
     if p+1 >= corpus_len or n == 0:
         # Reset memory
-        reset_hidden()
+        hidden_state = np.zeros(rnn.hidden_layer.hidden_state_shape)
         p = 0 # go to beginning
     c_input = wh.id2onehot(wh.char2id(corpus[p])).ravel()
     c_output = wh.id2onehot(wh.char2id(corpus[p+1])).ravel()
     
-    loss = back_prop(c_input,c_output,lr)
+    loss,hidden_state = back_prop(c_input,c_output,hidden_state,lr)
     smooth_loss = smooth_loss * 0.999 + loss * 0.001
 
     if not n % 1000:

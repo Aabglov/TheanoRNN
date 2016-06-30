@@ -16,6 +16,7 @@ ix_to_char = { i:ch for i,ch in enumerate(chars) }
 hidden_size = 100 # size of hidden layer of neurons
 seq_length = 25 # number of steps to unroll the RNN for
 learning_rate = 1e-1
+debug_epoch = int(round(2500/seq_length))
 
 # model parameters
 Wxh = np.random.randn(hidden_size, vocab_size)*0.01 # input to hidden
@@ -59,9 +60,9 @@ def lossFun(inputs, targets, hprev):
     dWxh += np.dot(dhraw, xs[t].T)
     dWhh += np.dot(dhraw, hs[t-1].T)
     dhnext = np.dot(Whh.T, dhraw)
-  for dparam in [dWxh, dWhh, dWhy, dbh, dby]:
+  #for dparam in [dWxh, dWhh, dWhy, dbh, dby]:
     np.clip(dparam, -5, 5, out=dparam) # clip to mitigate exploding gradients
-  return loss, dWxh, dWhh, dWhy, dbh, dby, hs[len(inputs)-1], losses
+  return loss, dWxh, dWhh, dWhy, dbh, dby, hs[len(inputs)-1]
 
 def sample(h, seed_ix, n):
   """ 
@@ -94,13 +95,13 @@ while True:
   targets = [char_to_ix[ch] for ch in data[p+1:p+seq_length+1]]
 
   # sample from the model now and then
-  if n % 100 == 0:
-    sample_ix = sample(hprev, inputs[0], 200)
+  if n % debug_epoch == 0:
+    sample_ix = sample(hprev, inputs[0], 100)
     txt = ''.join(ix_to_char[ix] for ix in sample_ix)
     print '----\n %s \n----' % (txt, )
 
   # forward seq_length characters through the net and fetch gradient
-  loss, dWxh, dWhh, dWhy, dbh, dby, hprev, losses = lossFun(inputs, targets, hprev)
+  loss, dWxh, dWhh, dWhy, dbh, dby, hprev = lossFun(inputs, targets, hprev)
   smooth_loss = smooth_loss * 0.999 + loss * 0.001
   
   # perform parameter update with Adagrad
@@ -110,8 +111,7 @@ while True:
     mem += dparam * dparam
     param += -learning_rate * dparam / np.sqrt(mem + 1e-8) # adagrad update
 
-  if n % 100 == 0:
-    print hprev
+  if n % debug_epoch == 0:
     print 'iter {}, loss: {}'.format(n, smooth_loss) # print progress
 
   p += seq_length # move data pointer

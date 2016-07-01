@@ -36,7 +36,6 @@ srng = RandomStreams()
 # VARIABLES INIT
 X = T.ivector('x')
 Y = T.ivector('y')
-LR = T.scalar('learning_rate')
 H = T.matrix('hidden_state')
 
 
@@ -75,7 +74,7 @@ if len(sys.argv) > 1:
     if len(sys.argv) > 2:
         decay_rate = float(sys.argv[2])
 else:
-    lr = 0.01
+    lr = 0.1
     decay_rate = 1.0#0.33
     
 ####################################################################################################
@@ -173,10 +172,10 @@ params = rnn.update_params
 memory_params = rnn.memory_params
 y_pred,hidden = rnn.forward_prop(X,H)
 
-cost = T.nnet.categorical_crossentropy(y_pred,Y).mean() 
-updates = Adagrad(cost,params,memory_params,lr=LR)
+cost = T.nnet.categorical_crossentropy(y_pred,Y).sum() 
+updates = Adagrad(cost,params,memory_params)
 
-back_prop = theano.function(inputs=[X,Y,H,LR], outputs=[cost,hidden], updates=updates, allow_input_downcast=True,on_unused_input='warn')
+back_prop = theano.function(inputs=[X,Y,H], outputs=[cost,hidden], updates=updates, allow_input_downcast=True,on_unused_input='warn')
 predict = theano.function(inputs=[X,H], outputs=[y_pred,hidden], updates=None, allow_input_downcast=True)
 
 #test_updates = theano.function(inputs=[X,Y], outputs=test_back_prop, allow_input_downcast=True,on_unused_input='warn')
@@ -186,7 +185,7 @@ def predictTest():
     seed = corpus[0]
     output = [seed]
     hidden_state = np.zeros(rnn.hidden_layer.hidden_state_shape)
-    for _ in range(seq_length):
+    for _ in range(100):
         pred_input = wh.id2onehot(wh.char2id(seed)).ravel()
         p,hidden_state = predict(pred_input,hidden_state)
         # Changed from argmax to random_choice - should introduce more variance - good for learnin'
@@ -206,7 +205,7 @@ while True:
     c_input = wh.id2onehot(wh.char2id(corpus[p])).ravel()
     c_output = wh.id2onehot(wh.char2id(corpus[p+1])).ravel()
     
-    loss,hidden_state = back_prop(c_input,c_output,hidden_state,lr)
+    loss,hidden_state = back_prop(c_input,c_output,hidden_state)
     smooth_loss = smooth_loss * 0.999 + loss * 0.001
 
     if not n % 1000:

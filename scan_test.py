@@ -13,18 +13,19 @@ def add(X,H):
     y = 3 * X
     return x,y,H
 
-outputs_info = H#T.as_tensor_variable(np.asarray([0,0,0]))
+outputs_info=[None,None,dict(initial=H, taps=[-1])]
 scan_result, scan_updates = theano.scan(fn=add,
                                         outputs_info=outputs_info,
-                                        sequences=[X_LIST],
-                                        non_sequences=None
+                                        sequences=[X_LIST]
                                         )
 #Xs = scan_result[0]
+xs = scan_result[0]
+ys = scan_result[1]
 Hs = scan_result[2]
-add_test = theano.function(inputs=[X_LIST,HOLDER], outputs=[Hs], on_unused_input='warn')
+add_test = theano.function(inputs=[X_LIST,H], outputs=[xs,ys,Hs], on_unused_input='warn')
 
 # test
-print(add_test(np.asarray([1,2,3]),[1,0,0]))
+print(add_test(np.asarray([1,2,3]),1))
 
 ##up_to = T.iscalar("up_to")
 ##

@@ -10,7 +10,8 @@ from utils import floatX,dropout
 import random
 
 X = T.iscalar('x')
-F = T.vector('f')
+F = T.dvector('f')
+H = T.dmatrix('h')
 
 # RANDOM INIT
 def init_weights(x,y,name):
@@ -141,8 +142,8 @@ class RecurrentLayer:
         
     # Expects embedded input
     def forward_prop(self,F,H):
-        hidden_state = T.tanh(T.dot(F,self.wx) + T.dot(H,self.wh) + self.bh)
-        return hidden_state
+        H = T.tanh(T.dot(F,self.wx) + T.dot(H,self.wh) + self.bh)
+        return H
 
 class LinearLayer:
     def __init__(self,input_size,output_size,name):

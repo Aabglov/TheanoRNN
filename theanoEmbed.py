@@ -36,11 +36,15 @@ srng = RandomStreams()
 
 # VARIABLES INIT
 X_LIST = T.imatrix('x_list')
-Y_LIST = T.imatrix('y_list')
 X = T.ivector('x')
-Y = T.ivector('y')
-LR = T.scalar('learning_rate')
-H = T.matrix('hidden_update')
+
+Y_LIST = T.ivector('y_list')
+Y = T.iscalar('y')
+
+##Y_LIST = T.imatrix('y_list')
+##Y = T.ivector('y')
+
+H = T.dmatrix('hidden_update')
 
 
 # LOAD DATA
@@ -86,14 +90,14 @@ else:
 ######################################################################
 
 # RMSprop is for NERDS
-def Adagrad(cost, params, mem, lr=1e-1):
+def Adagrad(cost, params, mem, lr=0.1):
     grads = T.grad(cost=cost, wrt=params)
     updates = []
     for p,g,m in zip(params, grads, mem):
         g = T.clip(g,-5.,5)
         new_m = m + (g * g)
         updates.append((m,new_m))
-        updates.append((p, p - (lr * g) / T.sqrt(new_m + 1e-8)))
+        updates.append((p, p - ((lr * g) / T.sqrt(new_m + 1e-8))))
     return updates
 
 ##class RNN:
@@ -160,8 +164,8 @@ class RNN:
         #o = self.input_layer.forward_prop(X)
         H = self.hidden_layer.forward_prop(X,H)
         pred = self.output_layer.forward_prop(H)
-        cost = T.nnet.categorical_crossentropy(pred,Y).mean()
-        #cost = -T.log(pred[Y])
+        #cost = T.nnet.categorical_crossentropy(pred,Y).mean()
+        cost = -T.log(pred[Y])
         return cost,pred,H
     
 nodes = [100]
@@ -171,23 +175,23 @@ nodes = [100]
 
 rnn = RNN(wh.vocab_size,nodes[0],batch_size)
 params = rnn.update_params
-new_order = [0,1,3,2,4]
+#new_order = [0,1,3,2,4]
 memory_params = rnn.memory_params
-params = [params[i] for i in new_order]
-memory_params = [memory_params[i] for i in new_order]
+#params = [params[i] for i in new_order]
+#memory_params = [memory_params[i] for i in new_order]
 
 ##cost = T.nnet.categorical_crossentropy(y_pred,Y).mean() 
 ##updates = Adagrad(cost,params,memory_params,lr=LR)
 ##back_prop = theano.function(inputs=[X,Y,LR], outputs=cost, updates=updates, allow_input_downcast=True,on_unused_input='warn')
 
 #hidden_update = T.as_tensor_variable(np.zeros(rnn.hidden_layer.hidden_state_shape))
-scan_results,y_preds,hiddens = theano.scan(fn=rnn.calc_cost,
-                              #outputs_info=hidden_update,
-                              sequences=[X_LIST,Y_LIST],
-                              non_sequences = H,
+outputs_info=[None,None,dict(initial=H, taps=[-1])]
+scan_costs,y_preds,hiddens = theano.scan(fn=rnn.calc_cost,
+                              outputs_info=outputs_info,
+                              sequences=[X_LIST,Y_LIST]
                             )[0] # only need the results, not the updates
 
-scan_cost = T.sum(scan_results)
+scan_cost = T.sum(scan_costs)
 hidden_state = hiddens[-1]
 updates = Adagrad(scan_cost,params,memory_params)
 back_prop = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=[scan_cost,hidden_state], updates=updates)
@@ -206,13 +210,14 @@ test_hidden = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=hiddens, updates
 #test_updates = theano.function(inputs=[X,Y], outputs=test_back_prop, allow_input_downcast=True,on_unused_input='warn')
 print("Model initialized, beginning training")
 
-def predictTest(hs):
+def predictTest():
     seed = corpus[0]
     output = [seed]
-    hidden_state = copy.copy(hs)#np.zeros(rnn.hidden_layer.hidden_state_shape)
-    for _ in range(seq_length):
+    hidden_state = np.zeros(rnn.hidden_layer.hidden_state_shape)
+    for _ in range(seq_length*4):
         pred_input = [wh.id2onehot(wh.char2id(seed))]
-        pred_output_UNUSED = [wh.id2onehot(wh.char2id(corpus[0]))] # This value is only used to trigger the calc_cost.  It's incorrect, but it doesn't update the parameters to that's okay. Not great, but okay.
+        #pred_output_UNUSED = [wh.id2onehot(wh.char2id(corpus[0]))] # This value is only used to trigger the calc_cost.  It's incorrect, but it doesn't update the parameters to that's okay. Not great, but okay.
+        pred_output_UNUSED = [wh.char2id(corpus[0])]
         p,hidden_state = predict(pred_input,pred_output_UNUSED,hidden_state)
         # Changed from argmax to random_choice - should introduce more variance - good for learnin'
         letter = wh.id2char(np.random.choice(range(wh.vocab_size), p=p.ravel()))
@@ -240,14 +245,15 @@ while True:
         c = c_input[j]
         c2 = c_output[j]
         batch_input.append(wh.id2onehot(wh.char2id(c)))
-        batch_output.append(wh.id2onehot(wh.char2id(c2)))
+        #batch_output.append(wh.id2onehot(wh.char2id(c2)))
+        batch_output.append(wh.char2id(c2))
 
     loss,hidden_state = back_prop(batch_input,batch_output,hidden_state)
     smooth_loss = smooth_loss * 0.999 + loss * 0.001
 
     if not n % 100:
         #print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)
-        predictTest(hidden_state)
+        predictTest()
 #        H = test_hidden(batch_input,batch_output,hidden_state)
 #        for h in H:
 #            print h.ravel()

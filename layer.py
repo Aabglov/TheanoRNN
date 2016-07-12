@@ -12,6 +12,8 @@ import random
 X = T.iscalar('x')
 F = T.dvector('f')
 H = T.dmatrix('h')
+S = T.dmatrix('s')
+O = T.dmatrix('o')
 
 # RANDOM INIT
 def init_weights(x,y,name):
@@ -61,6 +63,8 @@ class LSTMLayer:
         self.x = input_size
         self.y = output_size
         self.batch_size = batch_size
+        self.hidden_state_shape = (batch_size,output_size)
+        self.hidden_output_shape = (batch_size,output_size)
         if dropout is None:
             self.dropout = 0
         else:
@@ -75,11 +79,8 @@ class LSTMLayer:
         self.bf = init_weights(1,output_size,'{}_fb'.format(name))
         self.bc = init_weights(1,output_size,'{}_cb'.format(name))
         self.bo = init_weights(1,output_size,'{}_ob'.format(name))
-        # Saved state and output
-        self.saved_state = init_weights(batch_size,output_size,'{}_ss'.format(name))
-        self.saved_output = init_weights(batch_size,output_size,'{}_so'.format(name))
         # Variables updated through back-prop
-        self.update_params = [self.wi,self.wf,self.wc,self.wo,self.bi,self.bf,self.bc,self.bo,self.saved_state] 
+        self.update_params = [self.wi,self.wf,self.wc,self.wo,self.bi,self.bf,self.bc,self.bo] 
         # Used in Adagrad calculation
         self.mwi = init_zeros(input_size+output_size,output_size,'m_{}_wi'.format(name))
         self.mwf = init_zeros(input_size+output_size,output_size,'m_{}_wf'.format(name))
@@ -89,33 +90,31 @@ class LSTMLayer:
         self.mbf = init_zeros(1,output_size,'m_{}_fb'.format(name))
         self.mbc = init_zeros(1,output_size,'m_{}_cb'.format(name))
         self.mbo = init_zeros(1,output_size,'m_{}_ob'.format(name))
-        self.m_saved_state = init_zeros(batch_size,output_size,'m_{}_ss'.format(name))
-        self.m_saved_output = init_zeros(batch_size,output_size,'m_{}_so'.format(name))
-        self.memory_params = [self.mwi,self.mwf,self.mwc,self.mwo,self.mbi,self.mbf,self.mbc,self.mbo,self.m_saved_state]
+        self.memory_params = [self.mwi,self.mwf,self.mwc,self.mwo,self.mbi,self.mbf,self.mbc,self.mbo]
 
 
     # Expects embedded input
-    def forward_prop(self,F):
+    def forward_prop(self,F,S,O):
         """Create a LSTM cell. See e.g.: http://arxiv.org/pdf/1402.1128v1.pdf
         Note that in this formulation, we omit the various connections between the
         previous state and the gates."""
 
         # Implementing dropout for regularization via:
         # https://arxiv.org/pdf/1409.2329.pdf
-        if self.dropout > 0:
-            self.saved_output = dropout(self.saved_output)
+        #if self.dropout > 0:
+        #    O = dropout(O)
 
         # since we use this everywhere we just make it a variable
-        inner_concat = T.concatenate([self.saved_output,F],axis=1)
+        inner_concat = T.concatenate([O,T.reshape(F,((self.batch_size,self.x)))],axis=1)
         
         forget_gate = T.nnet.sigmoid(T.dot(inner_concat,self.wf) + self.bf)
         input_gate = T.nnet.sigmoid(T.dot(inner_concat,self.wi)  + self.bi)
         update_gate = T.tanh(T.dot(inner_concat,self.wc) + self.bc)
         output_gate = T.nnet.sigmoid(T.dot(inner_concat,self.wo)+ self.bo)
         
-        self.saved_state = (forget_gate * self.saved_state) + (input_gate * update_gate)
-        self.saved_output = output_gate * T.tanh(self.saved_state)
-        return self.saved_output
+        S = (forget_gate * S) + (input_gate * update_gate)
+        O = output_gate * T.tanh(S)
+        return S,O
 
 class RecurrentLayer:
     def __init__(self,input_size,output_size,batch_size,name):

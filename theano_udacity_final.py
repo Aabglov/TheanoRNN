@@ -1,5 +1,6 @@
 ###############################################################
-#                        RNN THEANO
+#                        THE FINAL UDACITY PROJECT
+#                           WORD REVERSER
 ###############################################################
 
 # THEANO
@@ -17,6 +18,7 @@ import zipfile
 import string
 from six.moves.urllib.request import urlretrieve
 import copy
+import re
 
 # MATH
 import random
@@ -51,37 +53,25 @@ H = T.dmatrix('hidden_update')
 with open('input.txt','r') as f:
     data = f.read()
 f.close()
-corpus = data#.lower()
+corpus = re.split('\W+',data.lower())
 corpus_len = len(corpus)
 print("data loaded: {}".format(corpus_len))
 
 # Initialize wordhelper functions
-vocab = list(set(corpus))
+vocab = list(set(''.join(corpus)))
 wh = WordHelper(vocab)
 
 # BATCHES
-TRAIN_BATCHES = 1000
-TEST_BATCHES = int(TRAIN_BATCHES)# * 0.2)
-VALID_BATCHES = int(TRAIN_BATCHES * 0.2)
 batch_size = 1 # MAX_WORD_SIZE
 embed_size = 100
-seq_length = 25
-num_batches = int(corpus_len/seq_length)
+seq_length = 8 # average word length
+#num_batches = int(corpus_len/seq_length)
 
 # TRAINING PARAMS
 n_epochs = 100000
 cur_epoch = 0
 cur_grad = 0.
 use_saved = False
-# -- decay
-decay_epoch = 1000
-if len(sys.argv) > 1:
-    lr = float(sys.argv[1])
-    if len(sys.argv) > 2:
-        decay_rate = float(sys.argv[2])
-else:
-    lr = 0.1
-    decay_rate = 1.0#0.33
     
 ####################################################################################################
 # MODEL AND OPTIMIZATION
@@ -118,23 +108,31 @@ class RNN:
                              self.hidden_layer.memory_params + \
                              self.output_layer.memory_params
 
-    def calc_cost(self,X,Y,S,H):
+    def calc_preds(self,X,Y,S,H):
         e = self.input_layer.forward_prop(X)
         S,H = self.hidden_layer.forward_prop(e,S,H)
         pred = self.output_layer.forward_prop(H)
-        cost = T.nnet.categorical_crossentropy(pred,Y).mean()
-        return cost,pred,S,H
+        return pred,S,H
+
+    def calc_cost(self,pred,Y):
+        return T.mean(T.nnet.categorical_crossentropy(pred,Y))
+        
     
-nodes = [100]
+nodes = [1024]
 
 rnn = RNN(wh.vocab_size,embed_size,nodes[0],batch_size)
 params = rnn.update_params
 memory_params = rnn.memory_params
 
-outputs_info=[None,None,dict(initial=S, taps=[-1]),dict(initial=H, taps=[-1])]
-scan_costs,y_preds,states,outputs = theano.scan(fn=rnn.calc_cost,
+outputs_info=[None,dict(initial=S, taps=[-1]),dict(initial=H, taps=[-1])]
+y_preds,states,outputs = theano.scan(fn=rnn.calc_preds,
                               outputs_info=outputs_info,
                               sequences=[X_LIST,Y_LIST]
+                            )[0] # only need the results, not the updates
+
+scan_costs = theano.scan(fn=rnn.calc_cost,
+                              outputs_info=None,
+                              sequences=[y_preds,Y_LIST]
                             )[0] # only need the results, not the updates
 
 scan_cost = T.sum(scan_costs)
@@ -147,29 +145,33 @@ back_prop = theano.function(inputs=[X_LIST,Y_LIST,S,H], outputs=[scan_cost,hidde
 #test_grads  = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=grads, updates=None, allow_input_downcast=True)
 
 y_pred = y_preds[-1]
-predict = theano.function(inputs=[X_LIST,Y_LIST,S,H], outputs=[y_pred,hidden_state,hidden_output], updates=None, allow_input_downcast=True)
+predict = theano.function(inputs=[X_LIST,Y_LIST,S,H], outputs=[y_preds,hidden_state,hidden_output], updates=None, allow_input_downcast=True)
 
 test_hidden = theano.function(inputs=[X_LIST,Y_LIST,S,H], outputs=[states,outputs], updates=None, allow_input_downcast=True)
 
 print("Model initialized, beginning training")
 
 def predictTest():
-    seed = corpus[0]
-    output = [seed]
+    test_corpus = corpus[:5]#['the','quick','brown','fox','jumped']
+    output = []
     hidden_state = np.zeros(rnn.hidden_layer.hidden_state_shape)
     hidden_output = np.zeros(rnn.hidden_layer.hidden_output_shape)
-    for _ in range(seq_length*4):
-        pred_input = [wh.char2id(seed)]
-        # This value is only used to trigger the calc_cost.
-        # It's incorrect, but it doesn't update the parameters to that's okay.
-        # Not great, but okay.
-        pred_output_UNUSED = [wh.id2onehot(wh.char2id(corpus[0]))] 
-        p,hidden_state,hidden_output = predict(pred_input,pred_output_UNUSED,hidden_state,hidden_output)
-        # Changed from argmax to random_choice - good for learnin'
-        letter = wh.id2char(np.random.choice(range(wh.vocab_size), p=p.ravel()))
-        output.append(letter)
-        seed = letter
-    print("prediction:",''.join(output))
+    for _ in range(5):
+        word = test_corpus[_]
+        pred_input = []
+        pred_output_UNUSED = []
+        for i in range(len(word)):
+            pred_input.append(wh.char2id(word[i]))
+            # This value is only used to trigger the calc_cost.
+            # It's incorrect, but it doesn't update the parameters to that's okay.
+            # Not great, but okay.
+            pred_output_UNUSED.append(wh.id2onehot(wh.char2id(word[i])))
+        predictions,hidden_state,hidden_output = predict(pred_input,pred_output_UNUSED,hidden_state,hidden_output)
+        for p in predictions:
+            letter = wh.id2char(np.random.choice(range(wh.vocab_size), p=p.ravel()))
+            output.append(letter)
+        output.append(' ')
+    print("prediction:",''.join(output),'true:',' '.join(test_corpus))
 
 smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
 n = 0
@@ -180,10 +182,9 @@ while True:
         hidden_state = np.zeros(rnn.hidden_layer.hidden_state_shape)
         hidden_output = np.zeros(rnn.hidden_layer.hidden_output_shape)
         p = 0 # go to beginning
-    p2 = p + seq_length
-    c_input = corpus[p:p2]
-    c_output = corpus[p+1:p2+1]
-    
+    c_input = corpus[p]
+    c_output = wh.reverseWord(corpus[p])
+
     batch_input = []
     batch_output = []
     for j in range(len(c_input)):
@@ -197,13 +198,11 @@ while True:
 
     if not n % 100:
         predictTest()
-        print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)
+        print("Completed iteration:",n,"Cost: ",smooth_loss)
 
     p += seq_length
     n += 1
 
-
- 
         
 print("Training complete")
 predictTest()

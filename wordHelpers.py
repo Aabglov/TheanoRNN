@@ -65,6 +65,10 @@ class WordHelper:
       oh[i] = 1
       return oh
 
+  def onehot2id(self,oh):
+    i = np.argmax(oh)
+    return oh
+
   def words2text(self,words):
       text = ''
       for w in words:

@@ -54,6 +54,7 @@ H3 = T.dmatrix('hidden_update3')
 
 PRED_LIST = T.ivector('pred_list')
 INIT_PRED = T.iscalar('init_pred')
+PRED_SINGLE = T.iscalar('pred_unused')
 
 # LOAD DATA
 # New toy problem:
@@ -138,14 +139,18 @@ class RNN:
         return S1,H1,S2,H2,S3,H3
 
     # make predictions after the word has been sent through the
-    # entire network
-    def calc_preds(self,INIT_PRED,S1,H1,S2,H2,S3,H3):
+    # entire network.
+    # The pred_unused is the input from the sequence we use to kick
+    # off the prediction.  We don't actually need a value, just a
+    # sequence of same length as our input word so we know how many
+    # letters to predict.
+    def calc_preds(self,PRED_SINGLE,INIT_PRED,S1,H1,S2,H2,S3,H3):
         e = self.input_layer.forward_prop(INIT_PRED)
         S1,H1 = self.hidden_layer_1.forward_prop(e,S1,H1)
         S2,H2 = self.hidden_layer_2.forward_prop(H1,S2,H2)
         S3,H3 = self.hidden_layer_3.forward_prop(H2,S3,H3)
         pred = self.output_layer.forward_prop(H3)
-        INIT_PRED = wh.onehot2id(pred)
+        INIT_PRED = T.cast(wh.onehot2id(pred), 'int32')
         return pred,INIT_PRED,S1,H1,S2,H2,S3,H3
 
     def calc_cost(self,pred,Y):
@@ -198,14 +203,14 @@ hidden_output2 = outputs2[-1]
 hidden_state3 = states3[-1]
 hidden_output3 = outputs3[-1]
 updates = Adagrad(scan_cost,params,memory_params)
-forward_prop = theano.function(inputs=[X_LIST,S1,H1,S2,H2,S3,H3], outputs=[f_states1,f_outputs1,f_states2,f_outputs2,f_states3,f_outputs3], updates=None)
-back_prop = theano.function(inputs=[PRED_LIST,Y_LIST,S1,H1,S2,H2,S3,H3], outputs=[scan_cost,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3], updates=updates)
+forward_prop = theano.function(inputs=[X_LIST,S1,H1,S2,H2,S3,H3], outputs=[f_states1,f_outputs1,f_states2,f_outputs2,f_states3,f_outputs3], updates=None, allow_input_downcast=True)
+back_prop = theano.function(inputs=[PRED_LIST,INIT_PRED,S1,H1,S2,H2,S3,H3,Y_LIST], outputs=[scan_cost,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3], updates=updates, allow_input_downcast=True)
 
 #grads = T.grad(cost=scan_cost, wrt=params)
 #test_grads  = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=grads, updates=None, allow_input_downcast=True)
 
 y_pred = y_preds[-1]
-predict = theano.function(inputs=[X_LIST,Y_LIST,S1,H1,S2,H2,S3,H3], outputs=[y_preds,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3], updates=None, allow_input_downcast=True)
+predict = theano.function(inputs=[PRED_LIST,INIT_PRED,S1,H1,S2,H2,S3,H3], outputs=[y_preds,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3], updates=None, allow_input_downcast=True)
 
 #test_hidden = theano.function(inputs=[X_LIST,Y_LIST,S1,H1,S2,H2,S3,H3], outputs=[states,outputs], updates=None, allow_input_downcast=True)
 
@@ -220,6 +225,7 @@ def predictTest():
     hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
     hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
     hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
+    init_pred = 0
     for _ in range(5):
         word = test_corpus[_]
         pred_input = []
@@ -231,7 +237,7 @@ def predictTest():
             # Not great, but okay.
             pred_output_UNUSED.append(wh.id2onehot(wh.char2id(word[i])))
         hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(pred_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
-        predictions,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = predict(pred_input,pred_output_UNUSED,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+        predictions,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = predict(pred_output_UNUSED,init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
         for p in predictions:
             letter = wh.id2char(np.random.choice(range(wh.vocab_size), p=p.ravel()))
             output.append(letter)
@@ -241,6 +247,7 @@ def predictTest():
 smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
 n = 0
 p = 0
+init_pred = 0
 while True:
     if p+seq_length+1 >= corpus_len or n == 0:
         # Reset memory
@@ -264,7 +271,8 @@ while True:
     hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(batch_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
     # Note that batch_input is passed here only to provide back_prop with the appropriate number of items to iterate over.
     # it could just as easily be an empty array of the same length
-    loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = back_prop(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+    derp
+    loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = back_prop(batch_input,init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3,batch_output)
     smooth_loss = smooth_loss * 0.999 + loss * 0.001
 
     if not n % 100:

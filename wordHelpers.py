@@ -67,7 +67,7 @@ class WordHelper:
 
   def onehot2id(self,oh):
     i = np.argmax(oh)
-    return oh
+    return i
 
   def words2text(self,words):
       text = ''

@@ -9,6 +9,7 @@ import theano.tensor as T
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
 # I/O
+import io
 import pickle
 import os
 import timeit
@@ -33,6 +34,7 @@ import utils
 srng = RandomStreams()
 ####################################################################################################
 # CONSTANTS
+nodes = [50,100,50]
 
 # VARIABLES INIT
 X_LIST = T.ivector('x_list')
@@ -57,7 +59,7 @@ for path, subdirs, files in os.walk('/Users/keganrabil/Desktop/rap lyrics/lyrics
     for name in files:
         file_name = os.path.join(path, name)
         if file_name[-4:] == '.txt':
-            with open(file_name,'r',encoding='utf-8') as f:
+            with io.open(file_name,'r',encoding='utf-8') as f:
                 data += f.read()
         
 corpus = data#.lower()
@@ -148,8 +150,6 @@ class RNN:
         pred = self.output_layer.forward_prop(H3)
         cost = T.nnet.categorical_crossentropy(pred,Y).mean()
         return cost,pred,S1,H1,S2,H2,S3,H3
-    
-nodes = [100,256,100]
 
 rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
 params = rnn.update_params

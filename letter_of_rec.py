@@ -34,7 +34,7 @@ import utils
 srng = RandomStreams()
 ####################################################################################################
 # CONSTANTS
-nodes = [512,512,512]
+nodes = [512,512]
 
 # VARIABLES INIT
 X_LIST = T.ivector('x_list')
@@ -49,25 +49,24 @@ H1 = T.dmatrix('hidden_update1')
 S2 = T.dmatrix('hidden_state2')
 H2 = T.dmatrix('hidden_update2')
 
-S3 = T.dmatrix('hidden_state3')
-H3 = T.dmatrix('hidden_update3')
-
 
 # LOAD DATA
 try:
-    with open('rap_lyrics.pkl','r') as f:
+    with open('lor.pkl','r') as f:
         data = pickle.load(f)
     print("Data found, beginning model init...")
     
 except:
     print("Failed to find data file, reading lyrics...")
     data = u''
-    for path, subdirs, files in os.walk('/Users/keganrabil/Desktop/rap lyrics/lyrics'):
+    for path, subdirs, files in os.walk('/Users/keganrabil/Desktop/lor'):
         for name in files:
             file_name = os.path.join(path, name)
             if file_name[-4:] == '.txt':
                 with io.open(file_name,'r',encoding='utf-8') as f:
                     data += f.read()
+    with open('lor.pkl','w+') as f:
+        pickle.dump(data,f)
 
 corpus = data#.lower()
 corpus_len = len(corpus)
@@ -82,7 +81,7 @@ TRAIN_BATCHES = 1000
 TEST_BATCHES = int(TRAIN_BATCHES)# * 0.2)
 VALID_BATCHES = int(TRAIN_BATCHES * 0.2)
 batch_size = 1 # MAX_WORD_SIZE
-embed_size = 100
+embed_size = 50
 seq_length = 25
 num_batches = int(corpus_len/seq_length)
 
@@ -91,22 +90,16 @@ n_epochs = 100000
 cur_epoch = 0
 cur_grad = 0.
 use_saved = False
-# -- decay
-decay_epoch = 1000
-if len(sys.argv) > 1:
-    lr = float(sys.argv[1])
-    if len(sys.argv) > 2:
-        decay_rate = float(sys.argv[2])
-else:
-    lr = 0.1
-    decay_rate = 1.0#0.33
+
+# Learning Rate
+lr = 0.1
     
 ####################################################################################################
 # MODEL AND OPTIMIZATION
 ####################################################################################################
 
 # RMSprop is for NERDS
-def Adagrad(cost, params, mem, lr=0.1):
+def Adagrad(cost, params, mem):
     grads = T.grad(cost=cost, wrt=params)
     updates = []
     for p,g,m in zip(params, grads, mem):
@@ -151,25 +144,23 @@ class RNN:
         # Memory Parameters for Adagrad
         self.memory_params += self.output_layer.memory_params
 
-    def calc_cost(self,X,Y,S1,H1,S2,H2,S3,H3):
+    def calc_cost(self,X,Y,S1,H1,S2,H2):
         e = self.input_layer.forward_prop(X)
         S1,H1 = self.hidden_layer_1.forward_prop(e,S1,H1)
         S2,H2 = self.hidden_layer_2.forward_prop(H1,S2,H2)
-        S3,H3 = self.hidden_layer_3.forward_prop(H2,S3,H3)
-        pred = self.output_layer.forward_prop(H3)
+        pred = self.output_layer.forward_prop(H2)
         cost = T.nnet.categorical_crossentropy(pred,Y).mean()
-        return cost,pred,S1,H1,S2,H2,S3,H3
+        return cost,pred,S1,H1,S2,H2
 
 rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
 params = rnn.update_params
 memory_params = rnn.memory_params
 
 outputs_info=[None,None,dict(initial=S1, taps=[-1]),dict(initial=H1, taps=[-1]),
-                      dict(initial=S2, taps=[-1]),dict(initial=H2, taps=[-1]),
-                      dict(initial=S3, taps=[-1]),dict(initial=H3, taps=[-1])
+                      dict(initial=S2, taps=[-1]),dict(initial=H2, taps=[-1])
                       ]
 
-scan_costs,y_preds,states1,outputs1,states2,outputs2,states3,outputs3 = theano.scan(fn=rnn.calc_cost,
+scan_costs,y_preds,states1,outputs1,states2,outputs2 = theano.scan(fn=rnn.calc_cost,
                               outputs_info=outputs_info,
                               sequences=[X_LIST,Y_LIST]
                             )[0] # only need the results, not the updates
@@ -179,38 +170,39 @@ hidden_state1 = states1[-1]
 hidden_output1 = outputs1[-1]
 hidden_state2 = states2[-1]
 hidden_output2 = outputs2[-1]
-hidden_state3 = states3[-1]
-hidden_output3 = outputs3[-1]
 
 updates = Adagrad(scan_cost,params,memory_params)
-back_prop = theano.function(inputs=[X_LIST,Y_LIST,S1,H1,S2,H2,S3,H3], outputs=[scan_cost,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3], updates=updates)
+back_prop = theano.function(inputs=[X_LIST,Y_LIST,S1,H1,S2,H2], outputs=[scan_cost,hidden_state1,hidden_output1,hidden_state2,hidden_output2], updates=updates)
 
 #grads = T.grad(cost=scan_cost, wrt=params)
 #test_grads  = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=grads, updates=None, allow_input_downcast=True)
 
 y_pred = y_preds[-1]
-predict = theano.function(inputs=[X_LIST,Y_LIST,S1,H1,S2,H2,S3,H3], outputs=[y_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3], updates=None, allow_input_downcast=True)
+predict = theano.function(inputs=[X_LIST,Y_LIST,S1,H1,S2,H2], outputs=[y_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2], updates=None, allow_input_downcast=True)
 
 #test_hidden = theano.function(inputs=[X_LIST,Y_LIST,S,H], outputs=[states,outputs], updates=None, allow_input_downcast=True)
 
 print("Model initialized, beginning training")
 
 def predictTest():
-    seed = corpus[0]
-    output = [seed]
+    header_in = [wh.char2id(l) for l in "To Whom it may concern"]#corpus[0]
+    header_out = [wh.id2onehot(wh.char2id(l)) for l in "o Whom it may concern:"]#corpus[0]
     hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
     hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
     hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
     hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
-    hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
-    hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
+    # Feed header through network
+    preds,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = predict(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
+    # Seed will be colon, the last character in our header
+    seed = ":"
+    output = [seed]
     for _ in range(seq_length*4):
         pred_input = [wh.char2id(seed)]
         # This value is only used to trigger the calc_cost.
         # It's incorrect, but it doesn't update the parameters to that's okay.
         # Not great, but okay.
         pred_output_UNUSED = [wh.id2onehot(wh.char2id(corpus[0]))] 
-        p,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = predict(pred_input,pred_output_UNUSED,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+        p,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = predict(pred_input,pred_output_UNUSED,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
         # Changed from argmax to random_choice - good for learnin'
         letter = wh.id2char(np.random.choice(range(wh.vocab_size), p=p.ravel()))
         output.append(letter)
@@ -227,8 +219,6 @@ while True:
         hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
         hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
         hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
-        hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
-        hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
         p = 0 # go to beginning
     p2 = p + seq_length
     c_input = corpus[p:p2]
@@ -242,7 +232,7 @@ while True:
         batch_input.append(wh.char2id(c))
         batch_output.append(wh.id2onehot(wh.char2id(c2)))
         
-    loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = back_prop(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+    loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = back_prop(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
     smooth_loss = smooth_loss * 0.999 + loss * 0.001
 
     if not n % 100:

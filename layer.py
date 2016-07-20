@@ -101,8 +101,8 @@ class LSTMLayer:
 
         # Implementing dropout for regularization via:
         # https://arxiv.org/pdf/1409.2329.pdf
-        #if self.dropout > 0:
-        #    O = dropout(O)
+        if self.dropout > 0:
+            O = dropout(O) # Dropout function lives in utils.py
 
         # since we use this everywhere we just make it a variable
         inner_concat = T.concatenate([O,T.reshape(F,((self.batch_size,self.x)))],axis=1)

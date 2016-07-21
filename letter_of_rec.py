@@ -52,8 +52,8 @@ H2 = T.dmatrix('hidden_update2')
 
 # LOAD DATA
 try:
-    with open('lor.pkl','r') as f:
-        data = pickle.load(f)
+    with io.open('lor.pkl','rb') as f:
+        data = pickle.load(f,encoding='utf-8')
     print("Data found, beginning model init...")
     
 except:
@@ -65,7 +65,7 @@ except:
             if file_name[-4:] == '.txt':
                 with io.open(file_name,'r',encoding='utf-8') as f:
                     data += f.read()
-    with open('lor.pkl','w+') as f:
+    with open('lor.pkl','wb+') as f:
         pickle.dump(data,f)
 
 corpus = data#.lower()
@@ -152,7 +152,14 @@ class RNN:
         cost = T.nnet.categorical_crossentropy(pred,Y).mean()
         return cost,pred,S1,H1,S2,H2
 
-rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
+try:
+    with open('lor_rnn.pkl','rb') as f:
+        rnn = pickle.load(f,encoding='latin1') # use encoding='latin1' if converting from python2 object to python3 instance
+    print('loaded previous network')
+except:
+    rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
+    print("created new network")
+
 params = rnn.update_params
 memory_params = rnn.memory_params
 
@@ -212,35 +219,40 @@ def predictTest():
 smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
 n = 0
 p = 0
-while True:
-    if p+seq_length+1 >= corpus_len or n == 0:
-        # Reset memory
-        hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
-        hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
-        hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
-        hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
-        p = 0 # go to beginning
-    p2 = p + seq_length
-    c_input = corpus[p:p2]
-    c_output = corpus[p+1:p2+1]
-    
-    batch_input = []
-    batch_output = []
-    for j in range(len(c_input)):
-        c = c_input[j]
-        c2 = c_output[j]
-        batch_input.append(wh.char2id(c))
-        batch_output.append(wh.id2onehot(wh.char2id(c2)))
+try:
+    while True:
+        if p+seq_length+1 >= corpus_len or n == 0:
+            # Reset memory
+            hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
+            hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
+            hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
+            hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
+            p = 0 # go to beginning
+        p2 = p + seq_length
+        c_input = corpus[p:p2]
+        c_output = corpus[p+1:p2+1]
         
-    loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = back_prop(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
-    smooth_loss = smooth_loss * 0.999 + loss * 0.001
+        batch_input = []
+        batch_output = []
+        for j in range(len(c_input)):
+            c = c_input[j]
+            c2 = c_output[j]
+            batch_input.append(wh.char2id(c))
+            batch_output.append(wh.id2onehot(wh.char2id(c2)))
+            
+        loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = back_prop(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
+        smooth_loss = smooth_loss * 0.999 + loss * 0.001
 
-    if not n % 100:
-        predictTest()
-        print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)
+        if not n % 100:
+            predictTest()
+            print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)
 
-    p += seq_length
-    n += 1
+        p += seq_length
+        n += 1
+except KeyboardInterrupt:
+    with open('lor_rnn_new.pkl','wb+') as f:
+        pickle.dump(rnn,f)
+        
 
 
  

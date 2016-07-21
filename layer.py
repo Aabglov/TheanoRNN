@@ -10,10 +10,10 @@ from utils import floatX,dropout
 import random
 
 X = T.iscalar('x')
-F = T.dvector('f')
-H = T.dmatrix('h')
-S = T.dmatrix('s')
-O = T.dmatrix('o')
+F = T.vector('f')
+H = T.matrix('h')
+S = T.matrix('s')
+O = T.matrix('o')
 
 # RANDOM INIT
 def init_weights(x,y,name):
@@ -112,8 +112,8 @@ class LSTMLayer:
         update_gate = T.tanh(T.dot(inner_concat,self.wc) + self.bc)
         output_gate = T.nnet.sigmoid(T.dot(inner_concat,self.wo)+ self.bo)
         
-        S = (forget_gate * S) + (input_gate * update_gate)
-        O = output_gate * T.tanh(S)
+        S = T.cast((forget_gate * S) + (input_gate * update_gate),theano.config.floatX)
+        O = T.cast(output_gate * T.tanh(S),theano.config.floatX)
         return S,O
 
 class RecurrentLayer:

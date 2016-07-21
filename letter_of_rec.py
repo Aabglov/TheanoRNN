@@ -43,30 +43,38 @@ X = T.iscalar('x')
 Y_LIST = T.imatrix('y_list')
 Y = T.ivector('y')
 
-S1 = T.dmatrix('hidden_state1')
-H1 = T.dmatrix('hidden_update1')
+S1 = T.matrix('hidden_state1')
+H1 = T.matrix('hidden_update1')
 
-S2 = T.dmatrix('hidden_state2')
-H2 = T.dmatrix('hidden_update2')
+S2 = T.matrix('hidden_state2')
+H2 = T.matrix('hidden_update2')
 
 
 # LOAD DATA
 try:
+    # Python 3 load
     with io.open('lor.pkl','rb') as f:
         data = pickle.load(f,encoding='utf-8')
-    print("Data found, beginning model init...")
+    print("Data found, python3, beginning model init...")
     
 except:
-    print("Failed to find data file, reading lyrics...")
-    data = u''
-    for path, subdirs, files in os.walk('/Users/keganrabil/Desktop/lor'):
-        for name in files:
-            file_name = os.path.join(path, name)
-            if file_name[-4:] == '.txt':
-                with io.open(file_name,'r',encoding='utf-8') as f:
-                    data += f.read()
-    with open('lor.pkl','wb+') as f:
-        pickle.dump(data,f)
+    try:
+        # Python 2 load
+        with io.open('lor.pkl','rb') as f:
+            data = pickle.load(f)
+        print("Data found, python 2, beginning model init...")
+    except:
+        print("Data found, beginning model init...")
+        print("Failed to find data file, reading lyrics...")
+        data = u''
+        for path, subdirs, files in os.walk('/Users/keganrabil/Desktop/lor'):
+            for name in files:
+                file_name = os.path.join(path, name)
+                if file_name[-4:] == '.txt':
+                    with io.open(file_name,'r',encoding='utf-8') as f:
+                        data += f.read()
+        with open('lor.pkl','wb+') as f:
+            pickle.dump(data,f)
 
 corpus = data#.lower()
 corpus_len = len(corpus)
@@ -179,7 +187,7 @@ hidden_state2 = states2[-1]
 hidden_output2 = outputs2[-1]
 
 updates = Adagrad(scan_cost,params,memory_params)
-back_prop = theano.function(inputs=[X_LIST,Y_LIST,S1,H1,S2,H2], outputs=[scan_cost,hidden_state1,hidden_output1,hidden_state2,hidden_output2], updates=updates)
+back_prop = theano.function(inputs=[X_LIST,Y_LIST,S1,H1,S2,H2], outputs=[scan_cost,hidden_state1,hidden_output1,hidden_state2,hidden_output2], updates=updates,  allow_input_downcast=True)
 
 #grads = T.grad(cost=scan_cost, wrt=params)
 #test_grads  = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=grads, updates=None, allow_input_downcast=True)
@@ -194,10 +202,10 @@ print("Model initialized, beginning training")
 def predictTest():
     header_in = [wh.char2id(l) for l in "To Whom it may concern"]#corpus[0]
     header_out = [wh.id2onehot(wh.char2id(l)) for l in "o Whom it may concern:"]#corpus[0]
-    hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
-    hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
-    hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
-    hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
+    hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape,dtype='float32')
+    hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape,dtype='float32')
+    hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape,dtype='float32')
+    hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape,dtype='float32')
     # Feed header through network
     preds,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = predict(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
     # Seed will be colon, the last character in our header
@@ -223,10 +231,10 @@ try:
     while True:
         if p+seq_length+1 >= corpus_len or n == 0:
             # Reset memory
-            hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
-            hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
-            hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
-            hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
+            hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape,dtype='float32')
+            hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape,dtype='float32')
+            hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape,dtype='float32')
+            hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape,dtype='float32')
             p = 0 # go to beginning
         p2 = p + seq_length
         c_input = corpus[p:p2]

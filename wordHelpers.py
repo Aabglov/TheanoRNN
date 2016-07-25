@@ -39,7 +39,7 @@ class WordHelper:
   # Word helpers
   def genRandWord(self):
     word_len = np.random.randint(1,self.max_word_size)
-    word = [id2char(np.random.randint(1,self.vocab_size)) for _ in range(word_len)]
+    word = [self.id2char(np.random.randint(1,self.vocab_size)) for _ in range(word_len)]
     return ''.join(word)
 
   def genRandBatch(self):

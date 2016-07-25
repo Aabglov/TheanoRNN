@@ -56,19 +56,19 @@ PRED_LIST = T.ivector('pred_list')
 INIT_PRED = T.iscalar('init_pred')
 PRED_SINGLE = T.iscalar('pred_unused')
 
-# LOAD DATA
-# New toy problem:
-# first couple paragraphs from a random Federalist paper
-with open('input.txt','r') as f:
-    data = f.read()
-f.close()
-corpus = re.split('\W+',data.lower())
-corpus_len = len(corpus)
-print("data loaded: {}".format(corpus_len))
+# Alphabet
+vocab = ['a', 'c', 'b', 'e', 'd', 'g', 'f', 'i', 'h', 'k', 'm', 'l', 'o', 'n', 'q', 'p', 's', 'r', 'u', 't', 'w', 'v', 'y', 'x','z',' ']
+try:
+    with open('word_helpers_udacity.pkl','rb') as f:
+        wh = pickle.load(f) # use encoding='latin1' if converting from python2 object to python3 instance
+    print('loaded previous wordHelper object')
+except:
+    wh = WordHelper(vocab)
+    with open('word_helpers_udacity.pkl','wb+') as f:
+            pickle.dump(wh,f)
+    print("created new wordHelper object")
+    
 
-# Initialize wordhelper functions
-vocab = list(set(''.join(corpus)))
-wh = WordHelper(vocab)
 
 # BATCHES
 batch_size = 1 # MAX_WORD_SIZE
@@ -157,9 +157,17 @@ class RNN:
         return T.mean(T.nnet.categorical_crossentropy(pred,Y))
         
     
-nodes = [256,256,256]
+nodes = [512,512,512]
 
 rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
+try:
+    with open('udacity_rnn.pkl','rb') as f:
+        rnn = pickle.load(f) # use encoding='latin1' if converting from python2 object to python3 instance
+    print('loaded previous network')
+except:
+    rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
+    print("created new network")
+
 params = rnn.update_params
 memory_params = rnn.memory_params
 
@@ -203,7 +211,7 @@ hidden_output2 = outputs2[-1]
 hidden_state3 = states3[-1]
 hidden_output3 = outputs3[-1]
 updates = Adagrad(scan_cost,params,memory_params)
-forward_prop = theano.function(inputs=[X_LIST,S1,H1,S2,H2,S3,H3], outputs=[f_states1,f_outputs1,f_states2,f_outputs2,f_states3,f_outputs3], updates=None, allow_input_downcast=True)
+forward_prop = theano.function(inputs=[X_LIST,S1,H1,S2,H2,S3,H3], outputs=[f_hidden_state1,f_hidden_output1,f_hidden_state2,f_hidden_output2,f_hidden_state3,f_hidden_output3], updates=None, allow_input_downcast=True)
 back_prop = theano.function(inputs=[PRED_LIST,INIT_PRED,S1,H1,S2,H2,S3,H3,Y_LIST], outputs=[scan_cost,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3], updates=updates, allow_input_downcast=True)
 
 #grads = T.grad(cost=scan_cost, wrt=params)
@@ -217,16 +225,18 @@ predict = theano.function(inputs=[PRED_LIST,INIT_PRED,S1,H1,S2,H2,S3,H3], output
 print("Model initialized, beginning training")
 
 def predictTest():
-    test_corpus = corpus[:5]#['the','quick','brown','fox','jumped']
+    test_corpus = ['the','quick','brown','fox','jumped']
     output = []
-    hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
-    hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
-    hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
-    hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
-    hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
-    hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
     init_pred = 0
     for _ in range(5):
+        # RESET HIDDENS
+        hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
+        hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
+        hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
+        hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
+        hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
+        hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
+        # Prepare prediction inputs
         word = test_corpus[_]
         pred_input = []
         pred_output_UNUSED = []
@@ -235,7 +245,7 @@ def predictTest():
             # This value is only used to trigger the calc_cost.
             # It's incorrect, but it doesn't update the parameters to that's okay.
             # Not great, but okay.
-            pred_output_UNUSED.append(wh.id2onehot(wh.char2id(word[i])))
+            pred_output_UNUSED.append(0)
         hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(pred_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
         predictions,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = predict(pred_output_UNUSED,init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
         for p in predictions:
@@ -248,8 +258,8 @@ smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
 n = 0
 p = 0
 init_pred = 0
-while True:
-    if p+seq_length+1 >= corpus_len or n == 0:
+try:
+    while True:
         # Reset memory
         hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
         hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
@@ -257,33 +267,33 @@ while True:
         hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
         hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
         hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
-        p = 0 # go to beginning
-    c_input = corpus[p]
-    c_output = wh.reverseWord(corpus[p])
+        
+        c_input = wh.genRandWord()
+        c_output = wh.reverseWord(c_input)
 
-    batch_input = []
-    batch_output = []
-    for j in range(len(c_input)):
-        c = c_input[j]
-        c2 = c_output[j]
-        batch_input.append(wh.char2id(c))
-        batch_output.append(wh.id2onehot(wh.char2id(c2)))
-    hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(batch_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
-    # Note that batch_input is passed here only to provide back_prop with the appropriate number of items to iterate over.
-    # it could just as easily be an empty array of the same length
-    derp
-    loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = back_prop(batch_input,init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3,batch_output)
-    smooth_loss = smooth_loss * 0.999 + loss * 0.001
+        batch_input = []
+        batch_output = []
+        for j in range(len(c_input)):
+            c = c_input[j]
+            c2 = c_output[j]
+            batch_input.append(wh.char2id(c))
+            batch_output.append(wh.id2onehot(wh.char2id(c2)))
+        hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(batch_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+        # Note that batch_input is passed here only to provide back_prop with the appropriate number of items to iterate over.
+        # it could just as easily be an empty array of the same length
+        loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = back_prop(batch_input,init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3,batch_output)
+        smooth_loss = smooth_loss * 0.999 + loss * 0.001
 
-    if not n % 100:
-        predictTest()
-        print("Completed iteration:",n,"Cost: ",smooth_loss)
-
-    p += seq_length
-    n += 1
-
+        if not n % 100:
+            predictTest()
+            print("Completed iteration:",n,"Cost: ",smooth_loss)
+        n += 1
+        
+except KeyboardInterrupt:
+    with open('udacity_rnn.pkl','wb+') as f:
+        pickle.dump(rnn,f)
         
 print("Training complete")
-predictTest()
+
       
 

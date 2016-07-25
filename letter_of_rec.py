@@ -34,7 +34,7 @@ import utils
 srng = RandomStreams()
 ####################################################################################################
 # CONSTANTS
-nodes = [512,512]
+nodes = [128,128]
 
 # VARIABLES INIT
 X_LIST = T.ivector('x_list')
@@ -64,15 +64,17 @@ except:
             data = pickle.load(f)
         print("Data found, python 2, beginning model init...")
     except:
-        print("Data found, beginning model init...")
         print("Failed to find data file, reading lyrics...")
         data = u''
-        for path, subdirs, files in os.walk('/Users/keganrabil/Desktop/lor'):
-            for name in files:
-                file_name = os.path.join(path, name)
-                if file_name[-4:] == '.txt':
-                    with io.open(file_name,'r',encoding='utf-8') as f:
-                        data += f.read()
+##        for path, subdirs, files in os.walk('/Users/keganrabil/Desktop/lor'):
+##            for name in files:
+##                file_name = os.path.join(path, name)
+##                if file_name[-4:] == '.txt':
+##                    with io.open(file_name,'r',encoding='utf-8') as f:
+##                        data += f.read()
+
+        with io.open('/Users/keganrabil/Desktop/lor/input.txt','r',encoding='utf-8') as f:
+            data += f.read()
         with open('lor.pkl','wb+') as f:
             pickle.dump(data,f)
 
@@ -82,7 +84,17 @@ print("data loaded: {}".format(corpus_len))
 
 # Initialize wordhelper functions
 vocab = list(set(corpus))
-wh = WordHelper(vocab)
+
+try:
+    with open('word_helpers.pkl','rb') as f:
+        wh = pickle.load(f) # use encoding='latin1' if converting from python2 object to python3 instance
+    print('loaded previous wordHelper object')
+except:
+    wh = WordHelper(vocab)
+    with open('word_helpers.pkl','wb+') as f:
+            pickle.dump(wh,f)
+    print("created new wordHelper object")
+    
 
 # BATCHES
 TRAIN_BATCHES = 1000
@@ -162,7 +174,7 @@ class RNN:
 
 try:
     with open('lor_rnn.pkl','rb') as f:
-        rnn = pickle.load(f,encoding='latin1') # use encoding='latin1' if converting from python2 object to python3 instance
+        rnn = pickle.load(f) # use encoding='latin1' if converting from python2 object to python3 instance
     print('loaded previous network')
 except:
     rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
@@ -199,7 +211,7 @@ predict = theano.function(inputs=[X_LIST,Y_LIST,S1,H1,S2,H2], outputs=[y_pred,hi
 
 print("Model initialized, beginning training")
 
-def predictTest():
+def predictTest(n=100):
     header_in = [wh.char2id(l) for l in "To Whom it may concern"]#corpus[0]
     header_out = [wh.id2onehot(wh.char2id(l)) for l in "o Whom it may concern:"]#corpus[0]
     hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape,dtype='float32')
@@ -207,11 +219,11 @@ def predictTest():
     hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape,dtype='float32')
     hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape,dtype='float32')
     # Feed header through network
-    preds,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = predict(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
+    preds,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = predict(header_in,header_out,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
     # Seed will be colon, the last character in our header
     seed = ":"
     output = [seed]
-    for _ in range(seq_length*4):
+    for _ in range(n):
         pred_input = [wh.char2id(seed)]
         # This value is only used to trigger the calc_cost.
         # It's incorrect, but it doesn't update the parameters to that's okay.
@@ -258,7 +270,7 @@ try:
         p += seq_length
         n += 1
 except KeyboardInterrupt:
-    with open('lor_rnn_new.pkl','wb+') as f:
+    with open('lor_rnn.pkl','wb+') as f:
         pickle.dump(rnn,f)
         
 

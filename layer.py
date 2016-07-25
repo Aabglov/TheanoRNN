@@ -9,7 +9,7 @@ from utils import floatX,dropout
 # SCIPY
 import random
 
-X = T.iscalar('x')
+X = T.scalar('x')
 F = T.vector('f')
 H = T.matrix('h')
 S = T.matrix('s')
@@ -39,7 +39,7 @@ class OneHot:
         self.memory_params = [] # Placeholders
         
     def forward_prop(self,X):
-        return self.one_hot_matrix[X].reshape((self.batch_size,self.x))
+        return self.one_hot_matrix[T.cast(X, 'int32')].reshape((self.batch_size,self.x))
 
     
 class EmbedLayer:
@@ -55,7 +55,7 @@ class EmbedLayer:
         self.memory_params = [self.m_embed_matrix]
         
     def forward_prop(self,X):
-        self.embed = self.embed_matrix[X].reshape((self.batch_size,self.y))
+        self.embed = self.embed_matrix[T.cast(X, 'int32')].reshape((self.batch_size,self.y))
         return self.embed
 
 class LSTMLayer:

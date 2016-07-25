@@ -37,24 +37,24 @@ srng = RandomStreams()
 # CONSTANTS
 
 # VARIABLES INIT
-X_LIST = T.ivector('x_list')
-X = T.iscalar('x')
+X_LIST = T.vector('x_list')
+X = T.scalar('x')
 
-Y_LIST = T.imatrix('y_list')
-Y = T.ivector('y')
+Y_LIST = T.matrix('y_list')
+Y = T.vector('y')
 
-S1 = T.dmatrix('hidden_state1')
-H1 = T.dmatrix('hidden_update1')
+S1 = T.matrix('hidden_state1')
+H1 = T.matrix('hidden_update1')
 
-S2 = T.dmatrix('hidden_state2')
-H2 = T.dmatrix('hidden_update2')
+S2 = T.matrix('hidden_state2')
+H2 = T.matrix('hidden_update2')
 
-S3 = T.dmatrix('hidden_state3')
-H3 = T.dmatrix('hidden_update3')
+S3 = T.matrix('hidden_state3')
+H3 = T.matrix('hidden_update3')
 
-PRED_LIST = T.ivector('pred_list')
-INIT_PRED = T.iscalar('init_pred')
-PRED_SINGLE = T.iscalar('pred_unused')
+PRED_LIST = T.vector('pred_list')
+INIT_PRED = T.scalar('init_pred')
+PRED_SINGLE = T.scalar('pred_unused')
 
 # Alphabet
 vocab = ['a', 'c', 'b', 'e', 'd', 'g', 'f', 'i', 'h', 'k', 'm', 'l', 'o', 'n', 'q', 'p', 's', 'r', 'u', 't', 'w', 'v', 'y', 'x','z',' ']
@@ -150,7 +150,7 @@ class RNN:
         S2,H2 = self.hidden_layer_2.forward_prop(H1,S2,H2)
         S3,H3 = self.hidden_layer_3.forward_prop(H2,S3,H3)
         pred = self.output_layer.forward_prop(H3)
-        INIT_PRED = T.cast(wh.onehot2id(pred), 'int32')
+        INIT_PRED = T.cast(T.argmax(pred),theano.config.floatX)  # argmax returns an int, we need to keep everything floatX
         return pred,INIT_PRED,S1,H1,S2,H2,S3,H3
 
     def calc_cost(self,pred,Y):

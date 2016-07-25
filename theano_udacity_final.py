@@ -2,16 +2,17 @@
 #                        THE FINAL UDACITY PROJECT
 #                           WORD REVERSER
 ###############################################################
+import os
+os.environ["THEANO_FLAGS"] = "mode=FAST_RUN,device=cpu,floatX=float32"
 
 # THEANO
 import numpy as np
 import theano
 import theano.tensor as T
-from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
+from theano.tensor.shared_randomstreams import RandomStreams as RandomStreams
 
 # I/O
 import pickle
-import os
 import timeit
 import sys
 import zipfile
@@ -22,7 +23,7 @@ import re
 
 # MATH
 import random
-from math import e,log,sqrt
+from math import e,log,sqrt,isnan
 
 # LAYERS
 from layer import OneHot,EmbedLayer,LSTMLayer,LinearLayer,SoftmaxLayer
@@ -210,6 +211,7 @@ hidden_state2 = states2[-1]
 hidden_output2 = outputs2[-1]
 hidden_state3 = states3[-1]
 hidden_output3 = outputs3[-1]
+
 updates = Adagrad(scan_cost,params,memory_params)
 forward_prop = theano.function(inputs=[X_LIST,S1,H1,S2,H2,S3,H3], outputs=[f_hidden_state1,f_hidden_output1,f_hidden_state2,f_hidden_output2,f_hidden_state3,f_hidden_output3], updates=None, allow_input_downcast=True)
 back_prop = theano.function(inputs=[PRED_LIST,INIT_PRED,S1,H1,S2,H2,S3,H3,Y_LIST], outputs=[scan_cost,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3], updates=updates, allow_input_downcast=True)
@@ -249,7 +251,7 @@ def predictTest():
         hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(pred_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
         predictions,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = predict(pred_output_UNUSED,init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
         for p in predictions:
-            letter = wh.id2char(np.random.choice(range(wh.vocab_size), p=p.ravel()))
+            letter = wh.id2char(np.random.choice(wh.vocab_indices, p=p.ravel())) #srng.choice(size=(1,),a=wh.vocab_indices,p=p)
             output.append(letter)
         output.append(' ')
     print("prediction:",''.join(output),'true:',' '.join(test_corpus))
@@ -279,11 +281,18 @@ try:
             batch_input.append(wh.char2id(c))
             batch_output.append(wh.id2onehot(wh.char2id(c2)))
         hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(batch_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+        if isnan(hidden_state1[0][0]):
+            print "forward prop nan detected"
+            derp
         # Note that batch_input is passed here only to provide back_prop with the appropriate number of items to iterate over.
         # it could just as easily be an empty array of the same length
         loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = back_prop(batch_input,init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3,batch_output)
         smooth_loss = smooth_loss * 0.999 + loss * 0.001
 
+        if isnan(smooth_loss):
+            print "back prop nan detected"
+            derp
+            
         if not n % 100:
             predictTest()
             print("Completed iteration:",n,"Cost: ",smooth_loss)

@@ -22,6 +22,7 @@ class WordHelper:
     self.eos = -1
     self.vocab = vocab
     self.vocab_size = len(vocab)
+    self.vocab_indices = [i for i in range(self.vocab_size)]
     self.max_word_size = max_word_size
     
   def char2id(self,char):

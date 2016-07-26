@@ -95,7 +95,7 @@ def Adagrad(cost, params, mem, lr=0.1):
         g = T.clip(g,-5.,5)
         new_m = m + (g * g)
         updates.append((m,new_m))
-        updates.append((p, p - ((lr * g) / T.sqrt(new_m + 1e-8))))
+        updates.append((p, p - ((lr * g) / T.sqrt(new_m + 1e-6))))
     return updates
 
 class RNN:

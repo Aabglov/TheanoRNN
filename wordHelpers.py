@@ -13,7 +13,7 @@ EOS = -1 # Last element of vocab is End of Sequence tag
 
 
 class WordHelper:
-  def __init__(self,vocab,max_word_size=10,custom_eos=None):
+  def __init__(self,vocab,max_word_size=MAX_WORD_SIZE,custom_eos=None):
     if custom_eos is None:
       self.eos_char = u'\xa4' # Arbitrary end-of-sequence tag, I think it looks cool
     else:

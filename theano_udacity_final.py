@@ -57,19 +57,37 @@ PRED_LIST = T.vector('pred_list')
 INIT_PRED = T.scalar('init_pred')
 PRED_SINGLE = T.scalar('pred_unused')
 
-# Alphabet
-vocab = ['a', 'c', 'b', 'e', 'd', 'g', 'f', 'i', 'h', 'k', 'm', 'l', 'o', 'n', 'q', 'p', 's', 'r', 'u', 't', 'w', 'v', 'y', 'x','z',' ']
+# Intiate Word Helpers
+vocab = ['a', 'c', 'b', 'e', 'd', 'g', 'f', 'i', 'h', 'k', 'm', 'l', 'o', 'n', 'q', 'p', 's', 'r', 'u', 't', 'w', 'v', 'y', 'x','z']
 try:
     with open('word_helpers_udacity.pkl','rb') as f:
         wh = pickle.load(f) # use encoding='latin1' if converting from python2 object to python3 instance
     print('loaded previous wordHelper object')
 except:
-    wh = WordHelper(vocab)
+    wh = WordHelper(vocab,max_word_size=6)
     with open('word_helpers_udacity.pkl','wb+') as f:
             pickle.dump(wh,f)
     print("created new wordHelper object")
     
-
+# Pickle wrappers for network loading/saving
+def load_net():
+    model_path = os.path.join(os.path.dirname(__file__),'saved_models')
+    files = [f for f in os.listdir(model_path) if os.path.isfile(os.path.join(model_path, f)) and 'udacity_rnn' in f]
+    largest_n = 0
+    for f in files:
+        # Parse the iteration value from the file name to get the latest model
+        new_n = int(f.split('_rnn_')[1].split('.')[0])
+        if new_n > largest_n:
+            largest_n = new_n
+    with open(os.path.join(model_path,'udacity_rnn_{}.pkl').format(largest_n),'rb') as f: # use encoding='latin1' if converting from python2 object to python3 instance
+        rnn = pickle.load(f)
+    print("Loaded saved model: {} iterations already trained".format(largest_n))
+    return rnn
+            
+def save_net(rnn,n):
+    model_path = os.path.join(os.path.dirname(__file__),'saved_models')
+    with open(os.path.join(model_path,'udacity_rnn_{}.pkl').format(n),'wb+') as f:
+        pickle.dump(rnn,f)
 
 # BATCHES
 batch_size = 1 # MAX_WORD_SIZE
@@ -162,9 +180,7 @@ nodes = [512,512,512]
 
 rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
 try:
-    with open('udacity_rnn.pkl','rb') as f:
-        rnn = pickle.load(f) # use encoding='latin1' if converting from python2 object to python3 instance
-    print('loaded previous network')
+    rnn = load_net() 
 except:
     rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
     print("created new network")
@@ -271,7 +287,7 @@ try:
         hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
         
         c_input = wh.genRandWord()
-        c_output = wh.reverseWord(c_input)
+        c_output = c_input#wh.reverseWord(c_input)
 
         batch_input = []
         batch_output = []
@@ -281,9 +297,11 @@ try:
             batch_input.append(wh.char2id(c))
             batch_output.append(wh.id2onehot(wh.char2id(c2)))
         hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(batch_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+
         if isnan(hidden_state1[0][0]):
             print "forward prop nan detected"
-            derp
+            break
+        
         # Note that batch_input is passed here only to provide back_prop with the appropriate number of items to iterate over.
         # it could just as easily be an empty array of the same length
         loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = back_prop(batch_input,init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3,batch_output)
@@ -291,16 +309,18 @@ try:
 
         if isnan(smooth_loss):
             print "back prop nan detected"
-            derp
+            break
             
         if not n % 100:
             predictTest()
             print("Completed iteration:",n,"Cost: ",smooth_loss)
+
+        if not n % 1000:
+            save_net(rnn,n)
         n += 1
         
 except KeyboardInterrupt:
-    with open('udacity_rnn.pkl','wb+') as f:
-        pickle.dump(rnn,f)
+    save_net(rnn,n)
         
 print("Training complete")
 

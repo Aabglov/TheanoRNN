@@ -69,25 +69,6 @@ except:
             pickle.dump(wh,f)
     print("created new wordHelper object")
     
-# Pickle wrappers for network loading/saving
-def load_net():
-    model_path = os.path.join(os.path.dirname(__file__),'saved_models')
-    files = [f for f in os.listdir(model_path) if os.path.isfile(os.path.join(model_path, f)) and 'udacity_rnn' in f]
-    largest_n = 0
-    for f in files:
-        # Parse the iteration value from the file name to get the latest model
-        new_n = int(f.split('_rnn_')[1].split('.')[0])
-        if new_n > largest_n:
-            largest_n = new_n
-    with open(os.path.join(model_path,'udacity_rnn_{}.pkl').format(largest_n),'rb') as f: # use encoding='latin1' if converting from python2 object to python3 instance
-        rnn = pickle.load(f)
-    print("Loaded saved model: {} iterations already trained".format(largest_n))
-    return rnn
-            
-def save_net(rnn,n):
-    model_path = os.path.join(os.path.dirname(__file__),'saved_models')
-    with open(os.path.join(model_path,'udacity_rnn_{}.pkl').format(n),'wb+') as f:
-        pickle.dump(rnn,f)
 
 # BATCHES
 batch_size = 1 # MAX_WORD_SIZE
@@ -180,7 +161,7 @@ nodes = [512,512,512]
 
 rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
 try:
-    rnn = load_net() 
+    rnn = utils.load_net('udacity') 
 except:
     rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
     print("created new network")
@@ -316,11 +297,11 @@ try:
             print("Completed iteration:",n,"Cost: ",smooth_loss)
 
         if not n % 1000:
-            save_net(rnn,n)
+            utils.save_net(rnn,'udacity',n)
         n += 1
         
 except KeyboardInterrupt:
-    save_net(rnn,n)
+    utils.save_net(rnn,n)
         
 print("Training complete")
 

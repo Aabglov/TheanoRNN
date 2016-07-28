@@ -6,6 +6,8 @@ from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import pickle
 import random
 import zipfile
+import os
+
 
 # INIT RANDOM
 srng = RandomStreams()
@@ -28,6 +30,26 @@ def pickle_load(filename):
     with open(filename, 'rb') as f:
         o = pickle.load(f,encoding='latin1')
     return o
+
+# Pickle wrappers for network loading/saving
+def load_net(model_name):
+    model_path = os.path.join(os.path.dirname(__file__),'saved_models')
+    files = [f for f in os.listdir(model_path) if os.path.isfile(os.path.join(model_path, f)) and 'udacity_rnn' in f]
+    largest_n = 0
+    for f in files:
+        # Parse the iteration value from the file name to get the latest model
+        new_n = int(f.split('_rnn_')[1].split('.')[0])
+        if new_n > largest_n:
+            largest_n = new_n
+    with open(os.path.join(model_path,'{}_rnn_{}.pkl').format(model_name,largest_n),'rb') as f: # use encoding='latin1' if converting from python2 object to python3 instance
+        rnn = pickle.load(f)
+    print("Loaded saved model: {} iterations already trained".format(largest_n))
+    return rnn
+            
+def save_net(rnn,model_name,n):
+    model_path = os.path.join(os.path.dirname(__file__),'saved_models')
+    with open(os.path.join(model_path,'{}_rnn_{}.pkl').format(model_name,n),'wb+') as f:
+        pickle.dump(rnn,f)
 
 def castData(data):
     return theano.shared(floatX(data),borrow=True)

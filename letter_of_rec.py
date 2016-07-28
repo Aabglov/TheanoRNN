@@ -173,8 +173,7 @@ class RNN:
         return cost,pred,S1,H1,S2,H2
 
 try:
-    with open('lor_rnn.pkl','rb') as f:
-        rnn = pickle.load(f) # use encoding='latin1' if converting from python2 object to python3 instance
+    rnn = utils.load_net('lor')
     print('loaded previous network')
 except:
     rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
@@ -267,11 +266,13 @@ try:
             predictTest()
             print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)
 
+        if not n % 1000:
+            utils.save_net(rnn,'lor',n)
+
         p += seq_length
         n += 1
 except KeyboardInterrupt:
-    with open('lor_rnn.pkl','wb+') as f:
-        pickle.dump(rnn,f)
+    utils.save_net(rnn,'lor',n)
         
 
 

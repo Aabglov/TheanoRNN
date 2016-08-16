@@ -86,12 +86,12 @@ print("data loaded: {}".format(corpus_len))
 vocab = list(set(corpus))
 
 try:
-    with open('word_helpers.pkl','rb') as f:
+    with open('lor_word_helpers.pkl','rb') as f:
         wh = pickle.load(f) # use encoding='latin1' if converting from python2 object to python3 instance
     print('loaded previous wordHelper object')
 except:
     wh = WordHelper(vocab)
-    with open('word_helpers.pkl','wb+') as f:
+    with open('lor_word_helpers.pkl','wb+') as f:
             pickle.dump(wh,f)
     print("created new wordHelper object")
     
@@ -134,14 +134,16 @@ class RNN:
         self.batch_size = batch_size
         self.vocab_size = vocab_size
         # Input Layer
-        self.input_layer = EmbedLayer(vocab_size,embed_size,batch_size)
+        self.input_layer = OneHot(vocab_size,batch_size)#EmbedLayer(vocab_size,embed_size,batch_size)
         # Init update parameters
         self.update_params = self.input_layer.update_params
         # Init memory parameters fo Adagrad
         self.memory_params = self.input_layer.memory_params
+        # create a value to hold the current cost when training
+        self.current_cost = None
         
         # Hidden layer
-        layer_sizes = [embed_size] + hidden_layer_sizes
+        layer_sizes = [self.input_layer.y] + hidden_layer_sizes
         self.hidden_layer_names = []
         for i in range(len(layer_sizes)-1):
             name = 'hidden_layer_{}'.format(i+1) # begin names at 1, not 0
@@ -235,7 +237,11 @@ def predictTest(n=100):
         seed = letter
     print("prediction:",''.join(output))
 
-smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
+try:
+    smooth_loss = rnn.current_cost
+except:
+    smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
+    
 n = 0
 p = 0
 try:
@@ -261,7 +267,8 @@ try:
             
         loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = back_prop(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
         smooth_loss = smooth_loss * 0.999 + loss * 0.001
-
+        rnn.current_cost = smooth_loss
+        
         if not n % 100:
             predictTest()
             print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)

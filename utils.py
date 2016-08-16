@@ -34,7 +34,7 @@ def pickle_load(filename):
 # Pickle wrappers for network loading/saving
 def load_net(model_name):
     model_path = os.path.join(os.path.dirname(__file__),'saved_models')
-    files = [f for f in os.listdir(model_path) if os.path.isfile(os.path.join(model_path, f)) and 'udacity_rnn' in f]
+    files = [f for f in os.listdir(model_path) if os.path.isfile(os.path.join(model_path, f)) and model_name in f]
     largest_n = 0
     for f in files:
         # Parse the iteration value from the file name to get the latest model

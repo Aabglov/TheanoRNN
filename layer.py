@@ -39,7 +39,7 @@ class OneHot:
         self.memory_params = [] # Placeholders
         
     def forward_prop(self,X):
-        return self.one_hot_matrix[T.cast(X, 'int32')].reshape((self.batch_size,self.x))
+        return self.one_hot_matrix[T.cast(X, 'int32')].reshape((self.batch_size,self.y))
 
     
 class EmbedLayer:

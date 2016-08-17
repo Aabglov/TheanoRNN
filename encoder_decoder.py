@@ -1,5 +1,5 @@
 ###############################################################
-#                        THE FINAL UDACITY PROJECT
+#                        ENCODER - DECODER
 #                           WORD REVERSER
 ###############################################################
 import os
@@ -44,14 +44,17 @@ X = T.scalar('x')
 Y_LIST = T.matrix('y_list')
 Y = T.vector('y')
 
-S1 = T.matrix('hidden_state1')
-H1 = T.matrix('hidden_update1')
+E_S1 = T.matrix('encoder_hidden_state1')
+E_H1 = T.matrix('encoder_hidden_update1')
 
-S2 = T.matrix('hidden_state2')
-H2 = T.matrix('hidden_update2')
+E_S2 = T.matrix('encoder_hidden_state2')
+E_H2 = T.matrix('encoder_hidden_update2')
 
-S3 = T.matrix('hidden_state3')
-H3 = T.matrix('hidden_update3')
+D_S1 = T.matrix('decoder_hidden_state1')
+D_H1 = T.matrix('decoder_hidden_update1')
+
+D_S2 = T.matrix('decoder_hidden_state2')
+D_H2 = T.matrix('decoder_hidden_update2')
 
 NUM_PRED = T.iscalar('number_of_preds')
 INIT_PRED = T.scalar('init_pred')
@@ -80,6 +83,10 @@ n_epochs = 100000
 cur_epoch = 0
 cur_grad = 0.
 use_saved = False
+
+
+encoder_nodes = [100,100]
+decoder_nodes = [100,100]
     
 ####################################################################################################
 # MODEL AND OPTIMIZATION
@@ -155,9 +162,7 @@ class RNN:
     def calc_cost(self,pred,Y):
         return T.mean(T.nnet.categorical_crossentropy(pred,Y))
         
-    
-nodes = [512,512,512]
-#nodes = [100,100,100]
+
 
 rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
 try:
@@ -228,7 +233,7 @@ def predictTest():
     test_corpus = ['the','quick','brown','fox','jumped']
     output = []
     init_pred = 0
-    for _ in range(len(test_corpus)):
+    for _ in range(5):
         # RESET HIDDENS
         hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
         hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
@@ -240,6 +245,7 @@ def predictTest():
         word = test_corpus[_]
         init_pred = wh.char2id(wh.eos)
         pred_input = []
+        pred_output_UNUSED = []
         for i in range(len(word)):
             pred_input.append(wh.char2id(word[i]))
         hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(pred_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
@@ -265,7 +271,7 @@ try:
         hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
         init_pred = wh.char2id(wh.eos)
         c_input = wh.genRandWord()
-        c_output = c_input[::-1]#wh.reverseWord(c_input)
+        c_output = c_input#wh.reverseWord(c_input)
 
         batch_input = []
         batch_output = []
@@ -294,7 +300,7 @@ try:
             predictTest()
             print("Completed iteration:",n,"Cost: ",smooth_loss)
 
-        if not n % 10000:
+        if not n % 5000:
             utils.save_net(rnn,'udacity',n)
         n += 1
         

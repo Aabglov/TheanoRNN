@@ -28,9 +28,10 @@ def init_zeros(x,y,name):
 # Not technically a layer, but included here
 # for symmetry in the RNN class
 class OneHot: 
-    def __init__(self,vocab_size,batch_size):
+    def __init__(self,vocab_size,batch_size,eos):
         self.x = vocab_size
         self.y = vocab_size
+        self.eos = eos
         self.batch_size = batch_size
         self.one_hot_matrix = theano.shared(floatX(np.eye(self.x)),name='one_hot',borrow=True)
         # Variables updated through back-prop
@@ -39,7 +40,12 @@ class OneHot:
         self.memory_params = [] # Placeholders
         
     def forward_prop(self,X):
-        return self.one_hot_matrix[T.cast(X, 'int32')].reshape((self.batch_size,self.y))
+        if X == self.eos:
+            # This is a special case to kick off predictions.  If the end-of-sequence tag is passed in
+            # then we shouldn't propagate anything through the network so we send in a vector of 0's.
+            return theano.shared(floatX(np.zeros((self.batch_size,self.y))),name='one_hot_begin_pred',borrow=True)
+        else:
+            return self.one_hot_matrix[T.cast(X, 'int32')].reshape((self.batch_size,self.y))
 
     
 class EmbedLayer:

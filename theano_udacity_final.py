@@ -156,7 +156,8 @@ class RNN:
         return T.mean(T.nnet.categorical_crossentropy(pred,Y))
         
     
-nodes = [512,512,512]
+#nodes = [512,512,512]
+nodes = [128,256,128]
 #nodes = [100,100,100]
 
 rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
@@ -250,7 +251,11 @@ def predictTest():
         output.append(' ')
     print("prediction:",''.join(output),'true:',' '.join(test_corpus))
 
-smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
+if hasattr(rnn,'current_loss'):
+    smooth_loss = rnn.current_loss
+else:
+    smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
+    
 n = 0
 p = 0
 init_pred = 0
@@ -295,6 +300,7 @@ try:
             print("Completed iteration:",n,"Cost: ",smooth_loss)
 
         if not n % 10000:
+            rnn.current_loss = smooth_loss
             utils.save_net(rnn,'udacity',n)
         n += 1
         

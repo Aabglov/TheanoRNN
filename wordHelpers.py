@@ -39,7 +39,7 @@ class WordHelper:
 
   # Word helpers
   def genRandWord(self):
-    word_len = np.random.randint(1,self.max_word_size)
+    word_len = np.random.randint(1,self.max_word_size+1) # randint selects from 1 below high, increase by 1 to accomodate
     word = [self.id2char(np.random.randint(1,self.vocab_size)) for _ in range(word_len)]
     return ''.join(word)
 

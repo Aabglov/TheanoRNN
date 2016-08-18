@@ -238,7 +238,10 @@ def predictTest(n=100):
     print("prediction:",''.join(output))
 
 try:
-    smooth_loss = rnn.current_cost
+    if rnn.current_cost is not None:
+        smooth_loss = rnn.current_cost
+    else:
+        raise Exception # Bad form, but effective
 except:
     smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
     

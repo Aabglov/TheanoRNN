@@ -57,7 +57,7 @@ NUM_PRED = T.iscalar('number_of_preds')
 INIT_PRED = T.scalar('init_pred')
 
 # Intiate Word Helpers
-vocab = ['a', 'c', 'b', 'e', 'd', 'g', 'f', 'i', 'h', 'k', 'm', 'l', 'o', 'n', 'q', 'p', 's', 'r', 'u', 't', 'w', 'v', 'y', 'x','z']
+vocab = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
 try:
     with open('word_helpers_udacity.pkl','rb') as f:
         wh = pickle.load(f) # use encoding='latin1' if converting from python2 object to python3 instance
@@ -215,41 +215,41 @@ updates = Adagrad(scan_cost,params,memory_params)
 forward_prop = theano.function(inputs=[X_LIST,S1,H1,S2,H2,S3,H3], outputs=[f_hidden_state1,f_hidden_output1,f_hidden_state2,f_hidden_output2,f_hidden_state3,f_hidden_output3], updates=None, allow_input_downcast=True)
 back_prop = theano.function(inputs=[NUM_PRED,INIT_PRED,S1,H1,S2,H2,S3,H3,Y_LIST], outputs=[scan_cost,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3], updates=updates, allow_input_downcast=True)
 
-#grads = T.grad(cost=scan_cost, wrt=params)
-#test_grads  = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=grads, updates=None, allow_input_downcast=True)
-
 y_pred = y_preds[-1]
 predict = theano.function(inputs=[NUM_PRED,INIT_PRED,S1,H1,S2,H2,S3,H3], outputs=[y_preds,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3], updates=None, allow_input_downcast=True)
 
-#test_hidden = theano.function(inputs=[X_LIST,Y_LIST,S1,H1,S2,H2,S3,H3], outputs=[states,outputs], updates=None, allow_input_downcast=True)
 
 print("Model initialized, beginning training")
 
+def predWord(word):
+    # RESET HIDDENS
+    hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
+    hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
+    hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
+    hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
+    hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
+    hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
+    # Prepare forward prop
+    init_pred = wh.char2id(wh.eos)
+    pred_input = []
+    for i in range(len(word)):
+        pred_input.append(wh.char2id(word[i]))
+    hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(pred_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+    # Get Preds
+    predictions,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = predict(len(word),init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+    pred_word = ''.join([wh.id2char(np.random.choice(wh.vocab_indices, p=p.ravel())) for p in predictions])
+    return pred_word
+
 def predictTest():
-    test_corpus = ['the','quick','brown','fox','jumped']
-    output = []
+    test_corpus = ['the','quick','brown','fox','jumps']
+    output = ''
     init_pred = 0
     for _ in range(len(test_corpus)):
-        # RESET HIDDENS
-        hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
-        hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
-        hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
-        hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
-        hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
-        hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
         # Prepare prediction inputs
         word = test_corpus[_]
-        init_pred = wh.char2id(wh.eos)
-        pred_input = []
-        for i in range(len(word)):
-            pred_input.append(wh.char2id(word[i]))
-        hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(pred_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
-        predictions,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = predict(len(word),init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
-        for p in predictions:
-            letter = wh.id2char(np.random.choice(wh.vocab_indices, p=p.ravel())) #srng.choice(size=(1,),a=wh.vocab_indices,p=p)
-            output.append(letter)
-        output.append(' ')
-    print("prediction:",''.join(output),'true:',' '.join(test_corpus))
+        pred = predWord(word)
+        output += pred + ' '
+    print("prediction:",output,'true:',' '.join(test_corpus))
 
 if hasattr(rnn,'current_loss'):
     smooth_loss = rnn.current_loss

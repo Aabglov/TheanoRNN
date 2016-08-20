@@ -160,7 +160,6 @@ class RNN:
 nodes = [128,256,128]
 #nodes = [100,100,100]
 
-rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
 try:
     rnn = utils.load_net('udacity') 
 except:
@@ -281,19 +280,11 @@ try:
             
             batch_output.append(wh.id2onehot(wh.char2id(c2)))
         hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(batch_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
-
-        if isnan(hidden_state1[0][0]):
-            print "forward prop nan detected"
-            break
         
         # Note that batch_input is passed here only to provide back_prop with the appropriate number of items to iterate over.
         # it could just as easily be an empty array of the same length
         loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = back_prop(len(batch_input),init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3,batch_output)
         smooth_loss = smooth_loss * 0.999 + loss * 0.001
-
-        if isnan(smooth_loss):
-            print "back prop nan detected"
-            break
             
         if not n % 100:
             predictTest()

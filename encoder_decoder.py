@@ -44,6 +44,9 @@ X = T.scalar('x')
 Y_LIST = T.matrix('y_list')
 Y = T.vector('y')
 
+# TODO
+# Populate this in creation of the RNN
+
 E_S1 = T.matrix('encoder_hidden_state1')
 E_H1 = T.matrix('encoder_hidden_update1')
 
@@ -56,18 +59,32 @@ D_H1 = T.matrix('decoder_hidden_update1')
 D_S2 = T.matrix('decoder_hidden_state2')
 D_H2 = T.matrix('decoder_hidden_update2')
 
+HIDDEN_STATES = {'encoder_layer_1':{'state':E_S1,'output':E_H1},
+                 'encoder_layer_2':{'state':E_S2,'output':E_H2},
+                 'decoder_layer_1':{'state':D_S1,'output':D_H2},
+                 'decoder_layer_2':{'state':D_S2,'output':D_H2}
+                 }
+
+def ravelHiddens(HIDDEN_STATES):
+    hiddens = []
+    for k,v in HIDDEN_STATES.items():
+        hiddens.append(v['state'])
+        hiddens.append(v['output'])
+    return hiddens
+
+
 NUM_PRED = T.iscalar('number_of_preds')
 INIT_PRED = T.scalar('init_pred')
 
 # Intiate Word Helpers
-vocab = ['a', 'c', 'b', 'e', 'd', 'g', 'f', 'i', 'h', 'k', 'm', 'l', 'o', 'n', 'q', 'p', 's', 'r', 'u', 't', 'w', 'v', 'y', 'x','z']
+vocab = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
 try:
-    with open('word_helpers_udacity.pkl','rb') as f:
+    with open('word_helpers_encoder_decoder.pkl','rb') as f:
         wh = pickle.load(f) # use encoding='latin1' if converting from python2 object to python3 instance
     print('loaded previous wordHelper object')
 except:
     wh = WordHelper(vocab,max_word_size=6)
-    with open('word_helpers_udacity.pkl','wb+') as f:
+    with open('word_helpers_encoder_decoder.pkl','wb+') as f:
             pickle.dump(wh,f)
     print("created new wordHelper object")
     
@@ -104,7 +121,7 @@ def Adagrad(cost, params, mem, lr=0.1):
     return updates
 
 class RNN:
-    def __init__(self,vocab_size,embed_size,hidden_layer_sizes,batch_size,dropout=None):
+    def __init__(self,vocab_size,embed_size,encoder_layer_sizes,decoder_layer_sizes,batch_size,dropout=None):
         self.batch_size = batch_size
         self.vocab_size = vocab_size
         # Input Layer
@@ -113,15 +130,31 @@ class RNN:
         self.update_params = self.input_layer.update_params
         # Init memory parameters fo Adagrad
         self.memory_params = self.input_layer.memory_params
-        
-        # Hidden layer
-        layer_sizes = [self.input_layer.y] + hidden_layer_sizes
-        self.hidden_layer_names = []
-        for i in range(len(layer_sizes)-1):
-            name = 'hidden_layer_{}'.format(i+1) # begin names at 1, not 0
-            self.hidden_layer_names.append(name)
-            hl = LSTMLayer(layer_sizes[i],
-                               layer_sizes[i+1],
+        self.current_loss = 0
+        self.trained_iterations = 0
+        # Encoder
+        encoder_layer_sizes = [self.input_layer.y] + encoder_layer_sizes
+        self.encoder_layer_names = []
+        for i in range(len(encoder_layer_sizes)-1):
+            name = 'encoder_layer_{}'.format(i+1) # begin names at 1, not 0
+            self.encoder_layer_names.append(name)
+            hl = LSTMLayer(encoder_layer_sizes[i],
+                               encoder_layer_sizes[i+1],
+                               batch_size,
+                               name)
+            setattr(self,name,hl)                
+            # Add the update parameters to the rnn class
+            self.update_params += hl.update_params
+            self.memory_params += hl.memory_params
+
+        # Decoder
+        decoder_layer_sizes = [encoder_layer_sizes[-1]] + decoder_layer_sizes
+        self.decoder_layer_names = []
+        for i in range(len(decoder_layer_sizes)-1):
+            name = 'decoder_layer_{}'.format(i+1) # begin names at 1, not 0
+            self.decoder_layer_names.append(name)
+            hl = LSTMLayer(decoder_layer_sizes[i],
+                               decoder_layer_sizes[i+1],
                                batch_size,
                                name)
             setattr(self,name,hl)                
@@ -130,19 +163,30 @@ class RNN:
             self.memory_params += hl.memory_params
 
         # Output Layer
-        self.output_layer = SoftmaxLayer(hidden_layer_sizes[-1],vocab_size)
+        self.output_layer = SoftmaxLayer(decoder_layer_sizes[-1],vocab_size)
         # Update Parameters - Backprop
         self.update_params += self.output_layer.update_params
         # Memory Parameters for Adagrad
         self.memory_params += self.output_layer.memory_params
 
     # pass the word into the network to set all the hidden states.
-    def set_hiddens(self,X,S1,H1,S2,H2,S3,H3):
-        e = self.input_layer.forward_prop(X)
-        S1,H1 = self.hidden_layer_1.forward_prop(e,S1,H1)
-        S2,H2 = self.hidden_layer_2.forward_prop(H1,S2,H2)
-        S3,H3 = self.hidden_layer_3.forward_prop(H2,S3,H3)
-        return S1,H1,S2,H2,S3,H3
+    def encode(self,X,*hiddens):
+        # TODO:
+        # Would it be better to just attach the hidden_state,hidden_output
+        # variables to the layer object itself?
+        # Would that work with the way I'm doing this update?
+        DERP
+        o = self.input_layer.forward_prop(X)
+        # len(hiddens) will always be an even number
+        # because it contains the hidden state and hidden
+        # output of each layer
+        for n in self.encoder_layer_names:
+            # Get the encoder layer
+            encoder_layer = getattr(self,n)
+            # Forward Propagate
+            HIDDEN_STATES[n]['state'],HIDDEN_STATES[n]['output'] = encoder_layer.forward_prop(o,HIDDEN_STATES[n]['state'],HIDDEN_STATES[n]['output'])
+            o = HIDDEN_STATES[n]['output'] 
+        return hiddens
 
     # make predictions after the word has been sent through the
     # entire network.
@@ -150,57 +194,65 @@ class RNN:
     # off the prediction.  We don't actually need a value, just a
     # sequence of same length as our input word so we know how many
     # letters to predict.
-    def calc_preds(self,INIT_PRED,S1,H1,S2,H2,S3,H3):
-        e = self.input_layer.forward_prop(INIT_PRED)
-        S1,H1 = self.hidden_layer_1.forward_prop(e,S1,H1)
-        S2,H2 = self.hidden_layer_2.forward_prop(H1,S2,H2)
-        S3,H3 = self.hidden_layer_3.forward_prop(H2,S3,H3)
+    def decode(self,INIT_PRED,HIDDEN_STATES):
+        o = self.input_layer.forward_prop(INIT_PRED)
+        for n in self.decoder_layer_names:
+            # Get the decoder layer
+            decoder_layer = getattr(self,n)
+            # Foward Propagate
+            HIDDEN_STATES[n]['state'],HIDDEN_STATES[n]['output'] = encoder_layer.forward_prop(o,HIDDEN_STATES[n]['state'],HIDDEN_STATES[n]['output'])
+            o = HIDDEN_STATES[n]['output']
+        # Get predicton 
         pred = self.output_layer.forward_prop(H3)
         INIT_PRED = T.cast(T.argmax(pred),theano.config.floatX)  # argmax returns an int, we need to keep everything floatX
-        return pred,INIT_PRED,S1,H1,S2,H2,S3,H3
+        return pred,INIT_PRED,HIDDEN_STATES
 
     def calc_cost(self,pred,Y):
         return T.mean(T.nnet.categorical_crossentropy(pred,Y))
         
 
-
-rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
 try:
-    rnn = utils.load_net('udacity') 
+    rnn = utils.load_net('encoder_decoder') 
 except:
-    rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
+    rnn = RNN(wh.vocab_size,embed_size,encoder_nodes,decoder_nodes,batch_size)
     print("created new network")
 
 params = rnn.update_params
 memory_params = rnn.memory_params
 
-outputs_info=[dict(initial=S1, taps=[-1]),dict(initial=H1, taps=[-1]),
-              dict(initial=S2, taps=[-1]),dict(initial=H2, taps=[-1]),
-              dict(initial=S3, taps=[-1]),dict(initial=H3, taps=[-1])
-              ]
-# The f_ stands for forward_prop
-f_states1,f_outputs1,f_states2,f_outputs2,f_states3,f_outputs3 = theano.scan(fn=rnn.set_hiddens,
+# Generate the outputs_info
+#   This instructs Theano how to update variables during a scan.
+#   WARNING: Things are about to get SUPER ugly up in here.
+outputs_info = []
+# Prediction outputs info has a few extra values to keep track of
+# so we initialize it with those values.
+preds_info = [None,dict(initial=INIT_PRED, taps=[-1])] 
+for layer,hiddens in HIDDEN_STATES.items():
+    # Initial indicates the first value and taps[-1] tells the scan to use the previous value to update
+    outputs_info.append(dict(initial=hiddens['state'], taps=[-1])) 
+    outputs_info.append(dict(initial=hiddens['output'], taps=[-1]))
+    # Add the same values to the prediction outputs info
+    preds_info.append(dict(initial=hiddens['state'], taps=[-1])) 
+    preds_info.append(dict(initial=hiddens['output'], taps=[-1]))
+
+
+############################################# BEGIN THEANO FUNCTION DEFINITIONS ###################################
+# Encode
+#   Here we envoke the mysterious and treacherous power of the theano.scan utility
+encoder_hiddens = theano.scan(fn=rnn.encode,
                               outputs_info=outputs_info,
                               sequences=[X_LIST]
                             )[0] # only need the results, not the updates
 
-f_hidden_state1 = f_states1[-1]
-f_hidden_output1 = f_outputs1[-1]
-f_hidden_state2 = f_states2[-1]
-f_hidden_output2 = f_outputs2[-1]
-f_hidden_state3 = f_states3[-1]
-f_hidden_output3 = f_outputs3[-1]
-
-preds_info=[None,dict(initial=INIT_PRED, taps=[-1]),dict(initial=S1, taps=[-1]),dict(initial=H1, taps=[-1]),
-                                               dict(initial=S2, taps=[-1]),dict(initial=H2, taps=[-1]),
-                                               dict(initial=S3, taps=[-1]),dict(initial=H3, taps=[-1])
-              ]
-
-y_preds, id_preds, states1,outputs1,states2,outputs2,states3,outputs3 = theano.scan(fn=rnn.calc_preds,
+decoder_outputs = theano.scan(fn=rnn.decode,
                               outputs_info=preds_info,
                               sequences=None,
                               n_steps=NUM_PRED
                             )[0] # only need the results, not the updates
+
+y_preds = decoder_outputs[0]
+id_preds = decoder_outputs[1] 
+decoder_hiddens = decoder_outputs[2:] # states1,outputs1,states2,outputs2,states3,outputs3,...
 
 scan_costs = theano.scan(fn=rnn.calc_cost,
                               outputs_info=None,
@@ -208,26 +260,31 @@ scan_costs = theano.scan(fn=rnn.calc_cost,
                             )[0] # only need the results, not the updates
 
 scan_cost = T.sum(scan_costs)
-hidden_state1 = states1[-1]
-hidden_output1 = outputs1[-1]
-hidden_state2 = states2[-1]
-hidden_output2 = outputs2[-1]
-hidden_state3 = states3[-1]
-hidden_output3 = outputs3[-1]
 
 updates = Adagrad(scan_cost,params,memory_params)
-forward_prop = theano.function(inputs=[X_LIST,S1,H1,S2,H2,S3,H3], outputs=[f_hidden_state1,f_hidden_output1,f_hidden_state2,f_hidden_output2,f_hidden_state3,f_hidden_output3], updates=None, allow_input_downcast=True)
-back_prop = theano.function(inputs=[NUM_PRED,INIT_PRED,S1,H1,S2,H2,S3,H3,Y_LIST], outputs=[scan_cost,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3], updates=updates, allow_input_downcast=True)
+forward_prop = theano.function(inputs=[X_LIST,HIDDEN_STATES], outputs=[encoder_hiddens], updates=None, allow_input_downcast=True)
+back_prop = theano.function(inputs=[NUM_PRED,INIT_PRED,HIDDEN_STATES,Y_LIST], outputs=[scan_cost,decoder_hiddens], updates=updates, allow_input_downcast=True)
 
 #grads = T.grad(cost=scan_cost, wrt=params)
 #test_grads  = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=grads, updates=None, allow_input_downcast=True)
 
 y_pred = y_preds[-1]
-predict = theano.function(inputs=[NUM_PRED,INIT_PRED,S1,H1,S2,H2,S3,H3], outputs=[y_preds,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3], updates=None, allow_input_downcast=True)
+predict = theano.function(inputs=[NUM_PRED,INIT_PRED,HIDDEN_STATES], outputs=[y_preds,decoder_hiddens], updates=None, allow_input_downcast=True)
 
 #test_hidden = theano.function(inputs=[X_LIST,Y_LIST,S1,H1,S2,H2,S3,H3], outputs=[states,outputs], updates=None, allow_input_downcast=True)
 
+############################################# END THEANO FUNCTION DEFINITIONS ###################################
+
 print("Model initialized, beginning training")
+
+def genInitHiddens(rnn):
+    hiddens = {}
+    for n in rnn.encoder_layer_names:
+        e = getattr(rnn,n)
+        hiddens[n] = {}
+        hiddens[n]['state'] = np.zeros(e.hidden_state_shape)
+        hiddens[n]['output'] = np.zeros(e.hidden_output_shape)
+    return hiddens
 
 def predictTest():
     test_corpus = ['the','quick','brown','fox','jumped']
@@ -235,12 +292,7 @@ def predictTest():
     init_pred = 0
     for _ in range(5):
         # RESET HIDDENS
-        hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
-        hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
-        hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
-        hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
-        hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
-        hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
+        hiddens = genInitHiddens(rnn)
         # Prepare prediction inputs
         word = test_corpus[_]
         init_pred = wh.char2id(wh.eos)
@@ -248,30 +300,33 @@ def predictTest():
         pred_output_UNUSED = []
         for i in range(len(word)):
             pred_input.append(wh.char2id(word[i]))
-        hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(pred_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
-        predictions,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = predict(len(word),init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+        hiddens = forward_prop(pred_input,hiddens)
+        predictions,hiddens = predict(len(word),init_pred,hiddens)
         for p in predictions:
             letter = wh.id2char(np.random.choice(wh.vocab_indices, p=p.ravel())) #srng.choice(size=(1,),a=wh.vocab_indices,p=p)
             output.append(letter)
         output.append(' ')
     print("prediction:",''.join(output),'true:',' '.join(test_corpus))
 
-smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
-n = 0
-p = 0
+if hasattr(rnn,'current_loss'):
+    smooth_loss = rnn.current_loss
+else:
+    smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
+
+if hasattr(rnn,'trained_iterations'):
+    n = rnn.trained_iterations
+else:
+    n = 0
+    
+
 init_pred = 0
 try:
     while True:
         # Reset memory
-        hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
-        hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
-        hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
-        hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
-        hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
-        hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
+        hiddens = genInitHiddens(rnn)
         init_pred = wh.char2id(wh.eos)
         c_input = wh.genRandWord()
-        c_output = c_input#wh.reverseWord(c_input)
+        c_output = wh.reverseWord(c_input)
 
         batch_input = []
         batch_output = []
@@ -281,19 +336,24 @@ try:
             batch_input.append(wh.char2id(c))
             
             batch_output.append(wh.id2onehot(wh.char2id(c2)))
-        hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(batch_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+        hiddens = forward_prop(batch_input,hiddens)
 
+        # This is a debug statement to catch NaNs (not-a-number)
         if isnan(hidden_state1[0][0]):
-            print "forward prop nan detected"
+            print("forward prop nan detected")
             break
         
-        # Note that batch_input is passed here only to provide back_prop with the appropriate number of items to iterate over.
-        # it could just as easily be an empty array of the same length
-        loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = back_prop(len(batch_input),init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3,batch_output)
-        smooth_loss = smooth_loss * 0.999 + loss * 0.001
+        # Back propagate
+        loss,hiddens = back_prop(len(batch_input),init_pred,hiddens,batch_output)
 
+        # Set teh loss and current iteration
+        smooth_loss = smooth_loss * 0.999 + loss * 0.001
+        rnn.current_loss = smooth_loss
+        rnn.trained_iterations = n
+
+        # This is a debug statement to catch NaNs (not-a-number)
         if isnan(smooth_loss):
-            print "back prop nan detected"
+            print("back prop nan detected")
             break
             
         if not n % 100:
@@ -301,11 +361,13 @@ try:
             print("Completed iteration:",n,"Cost: ",smooth_loss)
 
         if not n % 5000:
-            utils.save_net(rnn,'udacity',n)
+            utils.save_net(rnn,'encoder_decoder',n)
         n += 1
-        
+
+# If I exit the program with the keyboard interrupt
+# this will save the current model
 except KeyboardInterrupt:
-    utils.save_net(rnn,'udacity',n)
+    utils.save_net(rnn,'encoder_decoder',n)
         
 print("Training complete")
 

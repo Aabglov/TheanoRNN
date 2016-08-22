@@ -65,12 +65,17 @@ HIDDEN_STATES = {'encoder_layer_1':{'state':E_S1,'output':E_H1},
                  'decoder_layer_2':{'state':D_S2,'output':D_H2}
                  }
 
-def ravelHiddens(HIDDEN_STATES):
-    hiddens = []
+def unravelHiddens(HIDDEN_STATES):
+    encoder_hiddens = []
+    decoder_hiddens = []
     for k,v in HIDDEN_STATES.items():
-        hiddens.append(v['state'])
-        hiddens.append(v['output'])
-    return hiddens
+        if 'encoder' in k:
+            encoder_hiddens.append(v['state'])
+            encoder_hiddens.append(v['output'])
+        elif 'decoder' in k:
+            decoder_hiddens.append(v['state'])
+            decoder_hiddens.append(v['output'])
+    return encoder_hiddens,decoder_hiddens
 
 
 NUM_PRED = T.iscalar('number_of_preds')
@@ -186,11 +191,11 @@ class RNN:
             # Determine the indicies of the corresponding hidden states.
             # They will always be passed in order of layer (encoder1, encoder2, decoder 1, decoder 2, ...)
             # with state, then output.
-            k = 2 * i # Because there are 2 elements in the hidden list for every 1 layer we double i
-            j = k + 1 # By adding 1 we get the element after k, which is always the hidden output
+            state = 2 * i # Because there are 2 elements in the hidden list for every 1 layer we double i
+            output = state + 1 # By adding 1 we get the element after k, which is always the hidden output
             # Forward Propagate
-            HIDDEN_STATES[n]['state'],HIDDEN_STATES[n]['output'] = encoder_layer.forward_prop(o,HIDDEN_STATES[n]['state'],HIDDEN_STATES[n]['output'])
-            o = HIDDEN_STATES[n]['output'] 
+            hiddens[state],hiddens[output] = encoder_layer.forward_prop(o,hiddens[state],hiddens[output])
+            o = hiddens[output]
         return hiddens
 
     # make predictions after the word has been sent through the
@@ -201,16 +206,22 @@ class RNN:
     # letters to predict.
     def decode(self,INIT_PRED,*hiddens):
         o = self.input_layer.forward_prop(INIT_PRED)
-        for n in self.decoder_layer_names:
+        for i in range(len(self.decoder_layer_names)):
+            n = self.decoder_layer_names[i]
             # Get the decoder layer
             decoder_layer = getattr(self,n)
-            # Foward Propagate
-            HIDDEN_STATES[n]['state'],HIDDEN_STATES[n]['output'] = encoder_layer.forward_prop(o,HIDDEN_STATES[n]['state'],HIDDEN_STATES[n]['output'])
-            o = HIDDEN_STATES[n]['output']
+            # Determine the indicies of the corresponding hidden states.
+            # They will always be passed in order of layer (encoder1, encoder2, decoder 1, decoder 2, ...)
+            # with state, then output.
+            state = 2 * i # Because there are 2 elements in the hidden list for every 1 layer we double i
+            output = state + 1 # By adding 1 we get the element after k, which is always the hidden output
+            # Forward Propagate
+            hiddens[state],hiddens[output] = decoder_layer.forward_prop(o,hiddens[state],hiddens[output])
+            o = hiddens[output]
         # Get predicton 
-        pred = self.output_layer.forward_prop(H3)
+        pred = self.output_layer.forward_prop(hiddens[output])
         INIT_PRED = T.cast(T.argmax(pred),theano.config.floatX)  # argmax returns an int, we need to keep everything floatX
-        return pred,INIT_PRED,HIDDEN_STATES
+        return pred,INIT_PRED,hiddens
 
     def calc_cost(self,pred,Y):
         return T.mean(T.nnet.categorical_crossentropy(pred,Y))
@@ -231,15 +242,12 @@ memory_params = rnn.memory_params
 outputs_info = []
 # Prediction outputs info has a few extra values to keep track of
 # so we initialize it with those values.
-preds_info = [None,dict(initial=INIT_PRED, taps=[-1])] 
-for layer,hiddens in HIDDEN_STATES.items():
-    # Initial indicates the first value and taps[-1] tells the scan to use the previous value to update
-    outputs_info.append(dict(initial=hiddens['state'], taps=[-1])) 
-    outputs_info.append(dict(initial=hiddens['output'], taps=[-1]))
-    # Add the same values to the prediction outputs info
-    preds_info.append(dict(initial=hiddens['state'], taps=[-1])) 
-    preds_info.append(dict(initial=hiddens['output'], taps=[-1]))
-
+preds_info = [None,dict(initial=INIT_PRED, taps=[-1])]
+encoder_hiddens,decoder_hiddens = unravelHiddens(HIDDENS)
+for e in encoder_hiddens:
+    outputs_info.append(dict(initial=e, taps=[-1]))
+for d in decoder_hiddens:
+    preds_info.append(dict(initial=d, taps=[-1]))
 
 ############################################# BEGIN THEANO FUNCTION DEFINITIONS ###################################
 # Encode

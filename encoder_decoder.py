@@ -175,14 +175,19 @@ class RNN:
         # Would it be better to just attach the hidden_state,hidden_output
         # variables to the layer object itself?
         # Would that work with the way I'm doing this update?
-        DERP
         o = self.input_layer.forward_prop(X)
         # len(hiddens) will always be an even number
         # because it contains the hidden state and hidden
         # output of each layer
-        for n in self.encoder_layer_names:
+        for i in range(len(self.encoder_layer_names)):
+            n = self.encoder_layer_names[i]
             # Get the encoder layer
             encoder_layer = getattr(self,n)
+            # Determine the indicies of the corresponding hidden states.
+            # They will always be passed in order of layer (encoder1, encoder2, decoder 1, decoder 2, ...)
+            # with state, then output.
+            k = 2 * i # Because there are 2 elements in the hidden list for every 1 layer we double i
+            j = k + 1 # By adding 1 we get the element after k, which is always the hidden output
             # Forward Propagate
             HIDDEN_STATES[n]['state'],HIDDEN_STATES[n]['output'] = encoder_layer.forward_prop(o,HIDDEN_STATES[n]['state'],HIDDEN_STATES[n]['output'])
             o = HIDDEN_STATES[n]['output'] 
@@ -194,7 +199,7 @@ class RNN:
     # off the prediction.  We don't actually need a value, just a
     # sequence of same length as our input word so we know how many
     # letters to predict.
-    def decode(self,INIT_PRED,HIDDEN_STATES):
+    def decode(self,INIT_PRED,*hiddens):
         o = self.input_layer.forward_prop(INIT_PRED)
         for n in self.decoder_layer_names:
             # Get the decoder layer

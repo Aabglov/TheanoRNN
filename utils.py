@@ -7,7 +7,7 @@ import pickle
 import random
 import zipfile
 import os
-
+import sys
 
 # INIT RANDOM
 srng = RandomStreams()
@@ -42,7 +42,10 @@ def load_net(model_name):
         if new_n > largest_n:
             largest_n = new_n
     with open(os.path.join(model_path,'{}_rnn_{}.pkl').format(model_name,largest_n),'rb') as f: # use encoding='latin1' if converting from python2 object to python3 instance
-        rnn = pickle.load(f,encoding='latin1')
+        if (sys.version_info > (3, 0)):
+            rnn = pickle.load(f,encoding='latin1')
+        else:
+            rnn = pickle.load(f)
     print("Loaded saved model: {} iterations already trained".format(largest_n))
     return rnn
             

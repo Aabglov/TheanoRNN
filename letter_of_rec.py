@@ -134,7 +134,7 @@ class RNN:
         self.batch_size = batch_size
         self.vocab_size = vocab_size
         # Input Layer
-        self.input_layer = OneHot(vocab_size,batch_size)#EmbedLayer(vocab_size,embed_size,batch_size)
+        self.input_layer = OneHot(vocab_size,batch_size,-1)#EmbedLayer(vocab_size,embed_size,batch_size)
         # Init update parameters
         self.update_params = self.input_layer.update_params
         # Init memory parameters fo Adagrad

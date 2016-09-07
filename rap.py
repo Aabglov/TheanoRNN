@@ -24,11 +24,11 @@ import random
 from math import e,log,sqrt
 
 # LAYERS
-from layer import OneHot,EmbedLayer,LSTMLayer,LinearLayer,SoftmaxLayer
+from vudu.layer import OneHot,EmbedLayer,LSTMLayer,LinearLayer,SoftmaxLayer
 
 # HELPERS
-from wordHelpers import WordHelper
-import utils
+from vudu.wordHelpers import WordHelper
+from vudu import utils
 
 # INIT RANDOM
 srng = RandomStreams()

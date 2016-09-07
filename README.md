@@ -1,7 +1,6 @@
-# TheanoSeq2Seq
-A theano implementation of a character sequence-to-sequence RNN
+# VUDU
+Vertically Unified Deep-learning Utility
 
-The RMSProp and LBFGS versions are non-functional, but contain a lot of helpful structural code.
-They're kept around for reference and as a way to see what I've already played around with.
+This is a module designed to be my personal toolbox when tackling machine learning problems.  I've been unsatisfied with other python modules that focused on deep-learning because they either offer little functionality and lots of control or little control and lots of functionality.  I've also been frustrated with the lack of focus around core concepts behind the scenes and obfuscation of necessarcy components of computation.  So I made my own.  
 
-The meat of this repo is theanoEmbed.py.  It needs a little cleaning, but the working structure is there.  I'm currently playing around with a toy problem of trying to get it to memorize a sentence.
+This module helps me read the bones.

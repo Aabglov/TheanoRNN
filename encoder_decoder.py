@@ -241,14 +241,9 @@ memory_params = rnn.memory_params
 #   This instructs Theano how to update variables during a scan.
 #   WARNING: Things are about to get SUPER ugly up in here.
 outputs_info = []
-# Prediction outputs info has a few extra values to keep track of
-# so we initialize it with those values.
-preds_info = [None,dict(initial=INIT_PRED, taps=[-1])]
 ENCODER_HIDDENS,DECODER_HIDDENS= unravelHiddens(HIDDEN_STATES)
 for e in ENCODER_HIDDENS:
     outputs_info.append(dict(initial=e, taps=[-1]))
-for d in DECODER_HIDDENS:
-    preds_info.append(dict(initial=d, taps=[-1]))
 
 ############################################# BEGIN THEANO FUNCTION DEFINITIONS ###################################
 # Encode
@@ -257,12 +252,25 @@ encoder_hiddens = theano.scan(fn=rnn.encode,
                               outputs_info=outputs_info,
                               sequences=[X_LIST]
                             )[0] # only need the results, not the updates
+encoder_output = encoder_hiddens[-1]
 
+
+# Prediction outputs info has a few extra values to keep track of
+# so we initialize it with those values.
+# TODO:
+# implement encoding_vector as attribute of rnn class.
+# Have encode set encoding_vector,
+# have decode reference it, recalculate and reset it.
+preds_info = [None]#,dict(initial=INIT_PRED, taps=[-1])]
+for d in DECODER_HIDDENS:
+    preds_info.append(dict(initial=d, taps=[-1]))
+    
 decoder_outputs = theano.scan(fn=rnn.decode,
                               outputs_info=preds_info,
                               sequences=None,
                               n_steps=NUM_PRED
                             )[0] # only need the results, not the updates
+
 
 y_preds = decoder_outputs[0]
 id_preds = decoder_outputs[1] 
@@ -277,7 +285,7 @@ scan_cost = T.sum(scan_costs)
 
 updates = Adagrad(scan_cost,params,memory_params)
 forward_prop = theano.function(inputs=[X_LIST,ENCODER_HIDDENS], outputs=[encoder_hiddens], updates=None, allow_input_downcast=True)
-back_prop = theano.function(inputs=[NUM_PRED,INIT_PRED,ENCODER_HIDDENS,Y_LIST], outputs=[scan_cost,decoder_hiddens], updates=updates, allow_input_downcast=True)
+back_prop = theano.function(inputs=[NUM_PRED,INIT_PRED,DECODER_HIDDENS,Y_LIST], outputs=[scan_cost,decoder_hiddens], updates=updates, allow_input_downcast=True)
 
 #grads = T.grad(cost=scan_cost, wrt=params)
 #test_grads  = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=grads, updates=None, allow_input_downcast=True)

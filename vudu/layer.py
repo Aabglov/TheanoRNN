@@ -5,6 +5,7 @@ import theano.tensor as T
 import pickle
 import random
 from utils import floatX,dropout
+from theano.tensor.shared_randomstreams import RandomStreams 
 
 # SCIPY
 import random
@@ -14,6 +15,9 @@ F = T.vector('f')
 H = T.matrix('h')
 S = T.matrix('s')
 O = T.matrix('o')
+
+# INIT RANDOM
+srng = RandomStreams()
 
 # RANDOM INIT
 def init_weights(x,y,name):
@@ -151,9 +155,11 @@ class RecurrentLayer:
         return H
 
 class LinearLayer:
-    def __init__(self,input_size,output_size,name):
+    def __init__(self,input_size,output_size,name,dropout=1.0,act='sigmoid'):
         self.x = input_size
         self.y = output_size
+        self.act = act
+        self.dropout_p = dropout
         self.w = init_weights(input_size,output_size,'{}_w'.format(name))
         self.b = init_weights(1,output_size,'{}_b'.format(name))
         # Variables updated through back-prop
@@ -163,9 +169,26 @@ class LinearLayer:
         self.mb = init_zeros(1,output_size,'m{}_b'.format(name))
         self.memory_params = [self.mw,self.mb]
         
+        # Activation Functions -- non-linearities
+    def activation(self,X):
+        if self.act == 'relu':
+            return T.maximum(X, 0.)
+        elif self.act == 'tanh':
+            return T.tanh(X)
+        else:
+            return T.nnet.sigmoid(X)
+
+    def dropout(self,x,p,training=True):
+        if training:
+            x = T.switch(srng.binomial(size=x.shape,p=p),x,0)
+        else:
+            x *= p
+        return x
+        
      # Expects saved output from last layer
-    def forward_prop(self,F):
-        self.pyx = T.dot(F,self.w) + self.b
+    def forward_prop(self,F,training):
+        d = self.dropout(F,self.dropout_p,training)
+        self.pyx = self.activation(T.dot(F,self.w) + T.tile(self.b,(F.shape[0],1)))
         return self.pyx
       
 class SoftmaxLayer:

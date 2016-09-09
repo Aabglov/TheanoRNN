@@ -65,6 +65,9 @@ HIDDEN_STATES = {'encoder_layer_1':{'state':E_S1,'output':E_H1},
                  'decoder_layer_2':{'state':D_S2,'output':D_H2}
                  }
 
+NUM_PRED = T.iscalar('number_of_preds')
+INIT_PRED = T.matrix('init_pred')
+
 def unravelHiddens(HIDDEN_STATES):
     encoder_hiddens = []
     decoder_hiddens = []
@@ -78,8 +81,6 @@ def unravelHiddens(HIDDEN_STATES):
     return encoder_hiddens,decoder_hiddens
 
 
-NUM_PRED = T.iscalar('number_of_preds')
-INIT_PRED = T.scalar('init_pred')
 
 # Intiate Word Helpers
 vocab = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
@@ -203,7 +204,6 @@ class RNN:
     # letters to predict.
     def decode(self,INIT_PRED,*hiddens):
         hiddens = list(hiddens)
-        o = self.input_layer.forward_prop(INIT_PRED)
         for i in range(len(self.decoder_layer_names)):
             n = self.decoder_layer_names[i]
             # Get the decoder layer
@@ -214,11 +214,10 @@ class RNN:
             state = 2 * i # Because there are 2 elements in the hidden list for every 1 layer we double i
             output = state + 1 # By adding 1 we get the element after k, which is always the hidden output
             # Forward Propagate
-            hiddens[state],hiddens[output] = decoder_layer.forward_prop(o,hiddens[state],hiddens[output])
-            o = hiddens[output]
+            hiddens[state],hiddens[output] = decoder_layer.forward_prop(INIT_PRED,hiddens[state],hiddens[output])
         # Get predicton 
-        pred = self.output_layer.forward_prop(hiddens[output])
-        INIT_PRED = T.cast(T.argmax(pred),theano.config.floatX)  # argmax returns an int, we need to keep everything floatX
+        INIT_PRED= self.output_layer.forward_prop(hiddens[output])
+        pred = T.cast(T.argmax(INIT_PRED),theano.config.floatX)
         # Put all returns into a list so the scan function
         # doesn't have to decompile multiple lists
         return_list = [pred,INIT_PRED] + hiddens
@@ -241,7 +240,7 @@ memory_params = rnn.memory_params
 #   This instructs Theano how to update variables during a scan.
 #   WARNING: Things are about to get SUPER ugly up in here.
 outputs_info = []
-ENCODER_HIDDENS,DECODER_HIDDENS= unravelHiddens(HIDDEN_STATES)
+ENCODER_HIDDENS,DECODER_HIDDENS = unravelHiddens(HIDDEN_STATES)
 for e in ENCODER_HIDDENS:
     outputs_info.append(dict(initial=e, taps=[-1]))
 
@@ -257,18 +256,14 @@ encoder_output = encoder_hiddens[-1]
 
 # Prediction outputs info has a few extra values to keep track of
 # so we initialize it with those values.
-# TODO:
-# implement encoding_vector as attribute of rnn class.
-# Have encode set encoding_vector,
-# have decode reference it, recalculate and reset it.
-preds_info = [None]#,dict(initial=INIT_PRED, taps=[-1])]
+preds_info = [None,dict(initial=encoder_output, taps=[-1])]
 for d in DECODER_HIDDENS:
     preds_info.append(dict(initial=d, taps=[-1]))
     
 decoder_outputs = theano.scan(fn=rnn.decode,
                               outputs_info=preds_info,
-                              sequences=None,
-                              n_steps=NUM_PRED
+                              n_steps=NUM_PRED,
+                              non_sequences=[INIT_PRED]
                             )[0] # only need the results, not the updates
 
 
@@ -284,14 +279,14 @@ scan_costs = theano.scan(fn=rnn.calc_cost,
 scan_cost = T.sum(scan_costs)
 
 updates = Adagrad(scan_cost,params,memory_params)
-forward_prop = theano.function(inputs=[X_LIST,ENCODER_HIDDENS], outputs=[encoder_hiddens], updates=None, allow_input_downcast=True)
-back_prop = theano.function(inputs=[NUM_PRED,INIT_PRED,DECODER_HIDDENS,Y_LIST], outputs=[scan_cost,decoder_hiddens], updates=updates, allow_input_downcast=True)
+#forward_prop = theano.function(inputs=[X_LIST,ENCODER_HIDDENS], outputs=[encoder_hiddens], updates=None, allow_input_downcast=True)
+back_prop = theano.function(inputs=[X_LIST,ENCODER_HIDDENS,NUM_PRED,DECODER_HIDDENS,Y_LIST], outputs=[scan_cost,encoder_hiddens,decoder_hiddens], updates=updates, allow_input_downcast=True)
 
 #grads = T.grad(cost=scan_cost, wrt=params)
 #test_grads  = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=grads, updates=None, allow_input_downcast=True)
 
 y_pred = y_preds[-1]
-predict = theano.function(inputs=[NUM_PRED,INIT_PRED,DECODER_HIDDENS], outputs=[y_preds,decoder_hiddens], updates=None, allow_input_downcast=True)
+predict = theano.function(inputs=[X_LIST,ENCODER_HIDDENS,NUM_PRED,DECODER_HIDDENS], outputs=[y_preds,encoder_hiddens,decoder_hiddens], updates=None, allow_input_downcast=True)
 
 #test_hidden = theano.function(inputs=[X_LIST,Y_LIST,S1,H1,S2,H2,S3,H3], outputs=[states,outputs], updates=None, allow_input_downcast=True)
 
@@ -300,13 +295,19 @@ predict = theano.function(inputs=[NUM_PRED,INIT_PRED,DECODER_HIDDENS], outputs=[
 print("Model initialized, beginning training")
 
 def genInitHiddens(rnn):
-    hiddens = {}
+    encoder_hiddens = {}
+    decoder_hiddens = {}
     for n in rnn.encoder_layer_names:
         e = getattr(rnn,n)
-        hiddens[n] = {}
-        hiddens[n]['state'] = np.zeros(e.hidden_state_shape)
-        hiddens[n]['output'] = np.zeros(e.hidden_output_shape)
-    return hiddens
+        encoder_hiddens [n] = {}
+        encoder_hiddens [n]['state'] = np.zeros(e.hidden_state_shape)
+        encoder_hiddens [n]['output'] = np.zeros(e.hidden_output_shape)
+    for n in rnn.decoder_layer_names:
+        d = getattr(rnn,n)
+        decoder_hiddens[n] = {}
+        decoder_hiddens[n]['state'] = np.zeros(d.hidden_state_shape)
+        decoder_hiddens[n]['output'] = np.zeros(d.hidden_output_shape)
+    return encoder_hiddens,decoder_hiddens
 
 def predictTest():
     test_corpus = ['the','quick','brown','fox','jumped']
@@ -314,7 +315,7 @@ def predictTest():
     init_pred = 0
     for _ in range(5):
         # RESET HIDDENS
-        hiddens = genInitHiddens(rnn)
+        encoder_hiddens,decoder_hiddens = genInitHiddens(rnn)
         # Prepare prediction inputs
         word = test_corpus[_]
         init_pred = wh.char2id(wh.eos)
@@ -322,8 +323,7 @@ def predictTest():
         pred_output_UNUSED = []
         for i in range(len(word)):
             pred_input.append(wh.char2id(word[i]))
-        hiddens = forward_prop(pred_input,hiddens)
-        predictions,hiddens = predict(len(word),init_pred,hiddens)
+        predictions,encoder_hiddens,decoder_hiddens = predict(pred_input,encoder_hiddens,len(word),decoder_hiddens)
         for p in predictions:
             letter = wh.id2char(np.random.choice(wh.vocab_indices, p=p.ravel())) #srng.choice(size=(1,),a=wh.vocab_indices,p=p)
             output.append(letter)
@@ -345,7 +345,7 @@ init_pred = 0
 try:
     while True:
         # Reset memory
-        hiddens = genInitHiddens(rnn)
+        encoder_hiddens,decoder_hiddens = genInitHiddens(rnn)
         init_pred = wh.char2id(wh.eos)
         c_input = wh.genRandWord()
         c_output = wh.reverseWord(c_input)
@@ -358,17 +358,11 @@ try:
             batch_input.append(wh.char2id(c))
             
             batch_output.append(wh.id2onehot(wh.char2id(c2)))
-        hiddens = forward_prop(batch_input,hiddens)
 
-        # This is a debug statement to catch NaNs (not-a-number)
-        if isnan(hidden_state1[0][0]):
-            print("forward prop nan detected")
-            break
-        
-        # Back propagate
-        loss,hiddens = back_prop(len(batch_input),init_pred,hiddens,batch_output)
+        # Forward and Back propagate
+        loss,encoder_hiddens,decoder_hiddens = back_prop(batch_input,encoder_hiddens,len(batch_input),decoder_hiddens,batch_output)
 
-        # Set teh loss and current iteration
+        # Set the loss and current iteration
         smooth_loss = smooth_loss * 0.999 + loss * 0.001
         rnn.current_loss = smooth_loss
         rnn.trained_iterations = n

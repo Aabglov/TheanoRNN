@@ -26,7 +26,7 @@ import random
 from math import e,log,sqrt,isnan
 
 # LAYERS
-from vudu.layer import OneHot,EmbedLayer,LSTMLayer,LinearLayer,SoftmaxLayer
+from vudu.layer import OneHot,EmbedLayer,LSTMLayer,LinearLayer,SoftmaxLayer,EncoderDecoderLayer
 
 # HELPERS
 from vudu.wordHelpers import WordHelper
@@ -43,27 +43,6 @@ X = T.scalar('x')
 
 Y_LIST = T.matrix('y_list')
 Y = T.vector('y')
-
-# TODO
-# Populate this in creation of the RNN
-
-E_S1 = T.matrix('encoder_hidden_state1')
-E_H1 = T.matrix('encoder_hidden_update1')
-
-E_S2 = T.matrix('encoder_hidden_state2')
-E_H2 = T.matrix('encoder_hidden_update2')
-
-D_S1 = T.matrix('decoder_hidden_state1')
-D_H1 = T.matrix('decoder_hidden_update1')
-
-D_S2 = T.matrix('decoder_hidden_state2')
-D_H2 = T.matrix('decoder_hidden_update2')
-
-HIDDEN_STATES = {'encoder_layer_1':{'state':E_S1,'output':E_H1},
-                 'encoder_layer_2':{'state':E_S2,'output':E_H2},
-                 'decoder_layer_1':{'state':D_S1,'output':D_H2},
-                 'decoder_layer_2':{'state':D_S2,'output':D_H2}
-                 }
 
 NUM_PRED = T.iscalar('number_of_preds')
 INIT_PRED = T.matrix('init_pred')
@@ -138,13 +117,14 @@ class RNN:
         self.memory_params = self.input_layer.memory_params
         self.current_loss = 0
         self.trained_iterations = 0
+        
         # Encoder
         encoder_layer_sizes = [self.input_layer.y] + encoder_layer_sizes
         self.encoder_layer_names = []
         for i in range(len(encoder_layer_sizes)-1):
             name = 'encoder_layer_{}'.format(i+1) # begin names at 1, not 0
             self.encoder_layer_names.append(name)
-            hl = LSTMLayer(encoder_layer_sizes[i],
+            hl = EncoderDecoderLayer(encoder_layer_sizes[i],
                                encoder_layer_sizes[i+1],
                                batch_size,
                                name)
@@ -159,7 +139,7 @@ class RNN:
         for i in range(len(decoder_layer_sizes)-1):
             name = 'decoder_layer_{}'.format(i+1) # begin names at 1, not 0
             self.decoder_layer_names.append(name)
-            hl = LSTMLayer(decoder_layer_sizes[i],
+            hl = EncoderDecoderLayer(decoder_layer_sizes[i],
                                decoder_layer_sizes[i+1],
                                batch_size,
                                name)
@@ -176,8 +156,8 @@ class RNN:
         self.memory_params += self.output_layer.memory_params
 
     # pass the word into the network to set all the hidden states.
-    def encode(self,X,*hiddens):
-        hiddens = list(hiddens)
+    def encode(self,X):
+        hiddens = []
         o = self.input_layer.forward_prop(X)
         # len(hiddens) will always be an even number
         # because it contains the hidden state and hidden
@@ -186,14 +166,10 @@ class RNN:
             n = self.encoder_layer_names[i]
             # Get the encoder layer
             encoder_layer = getattr(self,n)
-            # Determine the indicies of the corresponding hidden states.
-            # They will always be passed in order of layer (encoder1, encoder2, decoder 1, decoder 2, ...)
-            # with state, then output.
-            state = 2 * i # Because there are 2 elements in the hidden list for every 1 layer we double i
-            output = state + 1 # By adding 1 we get the element after k, which is always the hidden output
             # Forward Propagate
-            hiddens[state],hiddens[output] = encoder_layer.forward_prop(o,hiddens[state],hiddens[output])
-            o = hiddens[output]
+            encoder_layer.hidden_state,encoder_layer.hidden_output = encoder_layer.forward_prop(o)
+            hiddens.append(encoder_layer.hidden_state)
+            hiddens.append(encoder_layer.hidden_output)
         return hiddens
 
     # make predictions after the word has been sent through the
@@ -202,25 +178,22 @@ class RNN:
     # off the prediction.  We don't actually need a value, just a
     # sequence of same length as our input word so we know how many
     # letters to predict.
-    def decode(self,INIT_PRED,*hiddens):
-        hiddens = list(hiddens)
+    def decode(self,INIT_PRED):
+        hiddens = []
         for i in range(len(self.decoder_layer_names)):
             n = self.decoder_layer_names[i]
             # Get the decoder layer
             decoder_layer = getattr(self,n)
-            # Determine the indicies of the corresponding hidden states.
-            # They will always be passed in order of layer (encoder1, encoder2, decoder 1, decoder 2, ...)
-            # with state, then output.
-            state = 2 * i # Because there are 2 elements in the hidden list for every 1 layer we double i
-            output = state + 1 # By adding 1 we get the element after k, which is always the hidden output
             # Forward Propagate
-            hiddens[state],hiddens[output] = decoder_layer.forward_prop(INIT_PRED,hiddens[state],hiddens[output])
+            decoder_layer.hidden_state,decoder_layer.hidden_output = decoder_layer.forward_prop(INIT_PRED)
+            hiddens.append(decoder_layer.hidden_state)
+            hiddens.append(decoder_layer.hidden_output)
         # Get predicton 
-        INIT_PRED= self.output_layer.forward_prop(hiddens[output])
+        INIT_PRED= self.output_layer.forward_prop(hiddens[-1])
         pred = T.cast(T.argmax(INIT_PRED),theano.config.floatX)
         # Put all returns into a list so the scan function
         # doesn't have to decompile multiple lists
-        return_list = [pred,INIT_PRED] + hiddens
+        return_list = [pred,INIT_PRED] #+ hiddens
         return return_list
 
     def calc_cost(self,pred,Y):
@@ -239,29 +212,31 @@ memory_params = rnn.memory_params
 # Generate the outputs_info
 #   This instructs Theano how to update variables during a scan.
 #   WARNING: Things are about to get SUPER ugly up in here.
-outputs_info = []
-ENCODER_HIDDENS,DECODER_HIDDENS = unravelHiddens(HIDDEN_STATES)
-for e in ENCODER_HIDDENS:
-    outputs_info.append(dict(initial=e, taps=[-1]))
+encoder_outputs = []
+for name in rnn.encoder_layer_names:
+    layer = getattr(rnn,name)
+    encoder_outputs.append(dict(initial=layer.hidden_state, taps=[-1]))
+    encoder_outputs.append(dict(initial=layer.hidden_output, taps=[-1]))
 
 ############################################# BEGIN THEANO FUNCTION DEFINITIONS ###################################
 # Encode
 #   Here we envoke the mysterious and treacherous power of the theano.scan utility
-encoder_hiddens = theano.scan(fn=rnn.encode,
-                              outputs_info=outputs_info,
+encoder_outputs = theano.scan(fn=rnn.encode,
+                              outputs_info=None,
                               sequences=[X_LIST]
                             )[0] # only need the results, not the updates
-encoder_output = encoder_hiddens[-1]
-
+encoder_output = encoder_outputs[-1]
 
 # Prediction outputs info has a few extra values to keep track of
 # so we initialize it with those values.
-preds_info = [None,dict(initial=encoder_output, taps=[-1])]
-for d in DECODER_HIDDENS:
-    preds_info.append(dict(initial=d, taps=[-1]))
+decoder_outputs = [None,dict(initial=encoder_output, taps=[-1])]
+#for name in rnn.decoder_layer_names:
+#    layer = getattr(rnn,name)
+#    decoder_outputs.append(dict(initial=layer.hidden_state, taps=[-1]))
+#    decoder_outputs.append(dict(initial=layer.hidden_output, taps=[-1]))
     
 decoder_outputs = theano.scan(fn=rnn.decode,
-                              outputs_info=preds_info,
+                              outputs_info=decoder_outputs,
                               n_steps=NUM_PRED
                             )[0] # only need the results, not the updates
 

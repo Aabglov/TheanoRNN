@@ -126,6 +126,58 @@ class LSTMLayer:
         O = T.cast(output_gate * T.tanh(S),theano.config.floatX)
         return S,O
 
+class EncoderDecoderLayer:
+    def __init__(self,input_size,output_size,batch_size,name):
+        self.x = input_size
+        self.y = output_size
+        self.batch_size = batch_size
+        self.hidden_state_shape = (batch_size,output_size)
+        self.hidden_output_shape = (batch_size,output_size)
+        self.hidden_state = T.matrix('s')
+        self.hidden_output = T.matrix('o')
+        
+        # LSTM cell weights
+        self.wi = init_weights(input_size+output_size,output_size,'{}_wi'.format(name))
+        self.wf = init_weights(input_size+output_size,output_size,'{}_wf'.format(name))
+        self.wc = init_weights(input_size+output_size,output_size,'{}_wc'.format(name))
+        self.wo = init_weights(input_size+output_size,output_size,'{}_wo'.format(name))
+        # LSTM cell biases
+        self.bi = init_weights(1,output_size,'{}_ib'.format(name))
+        self.bf = init_weights(1,output_size,'{}_fb'.format(name))
+        self.bc = init_weights(1,output_size,'{}_cb'.format(name))
+        self.bo = init_weights(1,output_size,'{}_ob'.format(name))
+        # Variables updated through back-prop
+        self.update_params = [self.wi,self.wf,self.wc,self.wo,self.bi,self.bf,self.bc,self.bo] 
+        # Used in Adagrad calculation
+        self.mwi = init_zeros(input_size+output_size,output_size,'m_{}_wi'.format(name))
+        self.mwf = init_zeros(input_size+output_size,output_size,'m_{}_wf'.format(name))
+        self.mwc = init_zeros(input_size+output_size,output_size,'m_{}_wc'.format(name))
+        self.mwo = init_zeros(input_size+output_size,output_size,'m_{}_wo'.format(name))
+        self.mbi = init_zeros(1,output_size,'m_{}_ib'.format(name))
+        self.mbf = init_zeros(1,output_size,'m_{}_fb'.format(name))
+        self.mbc = init_zeros(1,output_size,'m_{}_cb'.format(name))
+        self.mbo = init_zeros(1,output_size,'m_{}_ob'.format(name))
+        self.memory_params = [self.mwi,self.mwf,self.mwc,self.mwo,self.mbi,self.mbf,self.mbc,self.mbo]
+
+
+    # Expects embedded input
+    def forward_prop(self,F):
+        """Create a LSTM cell. See e.g.: http://arxiv.org/pdf/1402.1128v1.pdf
+        Note that in this formulation, we omit the various connections between the
+        previous state and the gates."""
+
+        # since we use this everywhere we just make it a variable
+        inner_concat = T.concatenate([self.hidden_output,T.reshape(F,((self.batch_size,self.x)))],axis=1)
+        
+        forget_gate = T.nnet.sigmoid(T.dot(inner_concat,self.wf) + self.bf)
+        input_gate = T.nnet.sigmoid(T.dot(inner_concat,self.wi)  + self.bi)
+        update_gate = T.tanh(T.dot(inner_concat,self.wc) + self.bc)
+        output_gate = T.nnet.sigmoid(T.dot(inner_concat,self.wo)+ self.bo)
+        
+        self.hidden_state = T.cast((forget_gate * self.hidden_state) + (input_gate * update_gate),theano.config.floatX)
+        self.hidden_output = T.cast(output_gate * T.tanh(self.hidden_state),theano.config.floatX)
+        return self.hidden_state,self.hidden_output
+
 class RecurrentLayer:
     def __init__(self,input_size,output_size,batch_size,name):
         self.x = input_size

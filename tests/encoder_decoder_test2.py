@@ -16,7 +16,9 @@ def encode(X,H):
     x = X + 2.
     return x,H
 
-def decode(G,Y): # NON-SEQUENCES GO 2nd!!!!!
+# NOTE
+# NON-SEQUENCES GO 2nd
+def decode(Y,G): 
     G = G / 2.
     y = Y - G
     return y,G
@@ -30,7 +32,8 @@ xs = encode_result[0]
 Hs = encode_result[1]
 encode_test = theano.function(inputs=[X_LIST,H], outputs=[xs,Hs], on_unused_input='warn')
 
-decode_info=[dict(initial=Y, taps=[-1]),dict(initial=Hs, taps=[-1])]
+# The initial state has to be dimension 1 greater than the value itself
+decode_info=[dict(initial=Y_LIST, taps=[-1]),dict(initial=Hs, taps=[-1])]
 decode_result, decode_updates = theano.scan(fn=decode,
                                         outputs_info=decode_info,
                                         n_steps=NUM#,
@@ -40,7 +43,7 @@ decode_result, decode_updates = theano.scan(fn=decode,
 ys = decode_result[0]
 Gs = decode_result[1]
 cost = T.sum(ys)
-decode_test = theano.function(inputs=[X_LIST,H,NUM,Y], outputs=[ys,Gs], on_unused_input='warn')
+decode_test = theano.function(inputs=[X_LIST,H,NUM,Y_LIST], outputs=[ys,Gs], on_unused_input='warn')
 
 g = T.grad(cost=cost, wrt=[Hs])
 
@@ -49,6 +52,6 @@ g = T.grad(cost=cost, wrt=[Hs])
 xs_test,Hs_test = encode_test(np.asarray([1]),1)
 print('xs: {}'.format(xs_test))
 print('Hs: {}'.format(Hs_test))
-ys_test,Gs_test = decode_test(np.asarray([1]),1,4,1)
+ys_test,Gs_test = decode_test(np.asarray([1]),1,4,[1])
 print('ys: {}'.format(ys_test))
 print('Gs: {}'.format(Gs_test))

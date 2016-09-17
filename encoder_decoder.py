@@ -48,16 +48,16 @@ Y = T.vector('y')
 # Populate this in creation of the RNN
 
 E_S1 = T.matrix('encoder_hidden_state1')
-E_H1 = T.matrix('encoder_hidden_update1')
+E_H1 = T.matrix('encoder_hidden_output1')
 
 E_S2 = T.matrix('encoder_hidden_state2')
-E_H2 = T.matrix('encoder_hidden_update2')
+E_H2 = T.matrix('encoder_hidden_output2')
 
 D_S1 = T.matrix('decoder_hidden_state1')
-D_H1 = T.matrix('decoder_hidden_update1')
+D_H1 = T.matrix('decoder_hidden_output1')
 
 D_S2 = T.matrix('decoder_hidden_state2')
-D_H2 = T.matrix('decoder_hidden_update2')
+D_H2 = T.matrix('decoder_hidden_output2')
 
 HIDDEN_STATES = {'encoder_layer_1':{'state':E_S1,'output':E_H1},
                  'encoder_layer_2':{'state':E_S2,'output':E_H2},
@@ -251,7 +251,7 @@ encoder_hiddens = theano.scan(fn=rnn.encode,
                               outputs_info=outputs_info,
                               sequences=[X_LIST]
                             )[0] # only need the results, not the updates
-encoder_output = encoder_hiddens[-1]
+encoder_output = encoder_hiddens[-1][-1][-1]
 
 
 # Prediction outputs info has a few extra values to keep track of
@@ -262,6 +262,7 @@ for d in DECODER_HIDDENS:
     
 decoder_outputs = theano.scan(fn=rnn.decode,
                               outputs_info=preds_info,
+                              sequences=None,
                               n_steps=NUM_PRED
                             )[0] # only need the results, not the updates
 

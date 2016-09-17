@@ -4,7 +4,7 @@ import theano
 import theano.tensor as T
 import pickle
 import random
-from utils import floatX,dropout
+from vudu.utils import floatX,dropout
 from theano.tensor.shared_randomstreams import RandomStreams 
 
 # SCIPY
@@ -227,8 +227,10 @@ class LinearLayer:
             return T.maximum(X, 0.)
         elif self.act == 'tanh':
             return T.tanh(X)
-        else:
+        elif self.act == 'sigmoid':
             return T.nnet.sigmoid(X)
+        else:
+            return X
 
     def dropout(self,x,p,training=True):
         if training:
@@ -238,7 +240,7 @@ class LinearLayer:
         return x
         
      # Expects saved output from last layer
-    def forward_prop(self,F,training):
+    def forward_prop(self,F,training=True):
         d = self.dropout(F,self.dropout_p,training)
         self.pyx = self.activation(T.dot(F,self.w) + T.tile(self.b,(F.shape[0],1)))
         return self.pyx

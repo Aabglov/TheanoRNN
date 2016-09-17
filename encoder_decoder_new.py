@@ -167,9 +167,9 @@ class RNN:
             # Get the encoder layer
             encoder_layer = getattr(self,n)
             # Forward Propagate
-            encoder_layer.hidden_state,encoder_layer.hidden_output = encoder_layer.forward_prop(o)
-            hiddens.append(encoder_layer.hidden_state)
-            hiddens.append(encoder_layer.hidden_output)
+            hidden_state,hidden_output = encoder_layer.forward_prop(o,encoder_layer.hidden_state,encoder_layer.hidden_output)
+            hiddens.append(hidden_state)
+            hiddens.append(hidden_output)
         return hiddens
 
     # make predictions after the word has been sent through the

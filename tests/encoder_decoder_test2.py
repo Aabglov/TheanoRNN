@@ -6,8 +6,9 @@ H = T.scalar('h')
 G = T.scalar('g')
 X = T.scalar('x')
 X_LIST = T.vector('x_list')
-Y = T.scalar('y')
-Y_LIST = T.vector('y_list')
+# Proof of concept -- Shows that the inner dimension mismatch only occurs for non-matrices
+Y = T.matrix('y')
+Y_LIST = T.matrix('y_list')
 NUM = T.iscalar('num')
 
 # define a named function, rather than using lambda
@@ -49,9 +50,9 @@ g = T.grad(cost=cost, wrt=[Hs])
 
 
 # test
-xs_test,Hs_test = encode_test(np.asarray([1]),1)
+xs_test,Hs_test = encode_test([1],1)
 print('xs: {}'.format(xs_test))
 print('Hs: {}'.format(Hs_test))
-ys_test,Gs_test = decode_test(np.asarray([1]),1,4,[1])
+ys_test,Gs_test = decode_test([1],1,3,[[1]])
 print('ys: {}'.format(ys_test))
 print('Gs: {}'.format(Gs_test))

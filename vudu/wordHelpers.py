@@ -1,6 +1,6 @@
 # THEANO
 import numpy as np
-from utils import castInt,castData
+from vudu.utils import castInt,castData
 
 # SCIPY
 import random

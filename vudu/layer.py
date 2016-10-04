@@ -15,6 +15,7 @@ F = T.vector('f')
 H = T.matrix('h')
 S = T.matrix('s')
 O = T.matrix('o')
+W = T.matrix('w')
 
 # INIT RANDOM
 srng = RandomStreams()
@@ -222,29 +223,58 @@ class LinearLayer:
         self.memory_params = [self.mw,self.mb]
         
         # Activation Functions -- non-linearities
-    def activation(self,X):
+    def activation(self,F):
         if self.act == 'relu':
-            return T.maximum(X, 0.)
+            return T.maximum(F, 0.)
         elif self.act == 'tanh':
-            return T.tanh(X)
+            return T.tanh(F)
         elif self.act == 'sigmoid':
-            return T.nnet.sigmoid(X)
+            return T.nnet.sigmoid(F)
         else:
-            return X
+            return F
 
-    def dropout(self,x,p,training=True):
+    def dropout(self,F,p,training=True):
         if training:
-            x = T.switch(srng.binomial(size=x.shape,p=p),x,0)
+            F = T.switch(srng.binomial(size=F.shape,p=p),F,0)
         else:
-            x *= p
-        return x
+            F *= p
+        return F
         
      # Expects saved output from last layer
     def forward_prop(self,F,training=True):
         d = self.dropout(F,self.dropout_p,training)
-        self.pyx = self.activation(T.dot(F,self.w) + T.tile(self.b,(F.shape[0],1)))
+        self.pyx = self.activation(T.dot(d,self.w) + T.tile(self.b,(d.shape[0],1)))
         return self.pyx
-      
+
+# Special layer that doesn't have weight matrices
+# initialized.  It's just an empty structure
+# that will take in a weight matrix and a
+# training example then forward prop
+class EmptyLayer:
+    def __init__(self,name,act='sigmoid'):
+        self.act = act
+        self.dropout_p = 1.0
+        self.name = name
+        
+        # Activation Functions -- non-linearities
+    def activation(self,F):
+        if self.act == 'relu':
+            return T.maximum(F, 0.)
+        elif self.act == 'tanh':
+            return T.tanh(F)
+        elif self.act == 'sigmoid':
+            return T.nnet.sigmoid(F)
+        else:
+            return F
+        
+     # Expects saved output from last layer
+    def forward_prop(self,F,W):
+        # Note I'm usind W * d instead of my traditional
+        # d * W because the dimensions are mismatched
+        # due to coming from other functions
+        f = self.activation(T.dot(W[:,:-1],F) + W[:,-1]) # Pulling the last element of W as our bias  
+        return f
+    
 class SoftmaxLayer:
     def __init__(self,input_size,vocab_size):
         self.x = input_size

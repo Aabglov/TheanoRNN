@@ -100,45 +100,6 @@ def Adagrad(cost, params, mem, lr=0.1):
         updates.append((p, p - ((lr * g) / T.sqrt(new_m + 1e-8))))
     return updates
 
-##class RNN:
-##    def __init__(self,vocab_size,embed_size,output_size,hidden_layer_sizes,batch_size,dropout=None):
-##        self.embed_layer = EmbedLayer(vocab_size,embed_size,batch_size)
-##        self.batch_size = batch_size
-##        self.embed_size = embed_size
-##        self.vocab_size = vocab_size
-##        self.update_params = self.embed_layer.update_params
-##        # The first input of the hidden layers will be embed_size (accepting output from embed matrix)
-##        # and the last will be output_size
-##        layer_sizes = [embed_size] + hidden_layer_sizes + [output_size]
-##        self.hidden_layer_names = []
-##        for i in range(len(layer_sizes)-1):
-##            name = 'hidden_layer_{}'.format(i)
-##            self.hidden_layer_names.append(name)
-##            setattr(self,name,LSTMLayer(layer_sizes[i],
-##                                       layer_sizes[i+1],
-##                                       batch_size,
-##                                       name))
-##            # Dropout - if provided
-##            hl = getattr(self,name)
-##            if dropout is not None:
-##                hl.dropout = dropout
-##            else:
-##                hl.dropout = 0
-##                
-##            # Add the update parameters to the rnn class
-##            self.update_params += hl.update_params
-##        self.output_layer = SoftmaxLayer(output_size,vocab_size)
-##        self.update_params += self.output_layer.update_params
-##        
-##    def forward_prop(self,X):
-##        o = self.embed_layer.forward_prop(X)
-##        for layer_name in self.hidden_layer_names:
-##            hidden_layer = getattr(self,layer_name)
-##            o = hidden_layer.forward_prop(o)
-##        self.output_layer.forward_prop(o)
-##        return self.output_layer.pred
-
-
 class RNN:
     def __init__(self,vocab_size,hidden_layer_size,batch_size,dropout=None):
         self.batch_size = batch_size

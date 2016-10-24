@@ -55,7 +55,7 @@ H3 = T.dmatrix('hidden_update3')
 
 # LOAD DATA
 try:
-    with open('rap_lyrics.pkl','r') as f:
+    with open('rap_lyrics.pkl','rb') as f:
         data = pickle.load(f)
     print("Data found, beginning model init...")
     

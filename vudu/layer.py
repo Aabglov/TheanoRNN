@@ -208,11 +208,9 @@ class RecurrentLayer:
         return H
 
 class LinearLayer:
-    def __init__(self,input_size,output_size,name,dropout=1.0,act='sigmoid'):
+    def __init__(self,input_size,output_size,name):
         self.x = input_size
         self.y = output_size
-        self.act = act
-        self.dropout_p = dropout
         self.w = init_weights(input_size,output_size,'{}_w'.format(name))
         self.b = init_weights(1,output_size,'{}_b'.format(name))
         # Variables updated through back-prop
@@ -222,28 +220,36 @@ class LinearLayer:
         self.mb = init_zeros(1,output_size,'m{}_b'.format(name))
         self.memory_params = [self.mw,self.mb]
         
-        # Activation Functions -- non-linearities
-    def activation(self,F):
-        if self.act == 'relu':
-            return T.maximum(F, 0.)
-        elif self.act == 'tanh':
-            return T.tanh(F)
-        elif self.act == 'sigmoid':
-            return T.nnet.sigmoid(F)
-        else:
-            return F
+     # Expects saved output from last layer
+    def forward_prop(self,F):
+        self.pyx = T.nnet.sigmoid(T.dot(F,self.w) + self.b)#T.tile(self.b,(F.shape[0],1)))
+        return self.pyx
 
-    def dropout(self,F,p,training=True):
-        if training:
-            F = T.switch(srng.binomial(size=F.shape,p=p),F,0)
-        else:
-            F *= p
-        return F
+# REDUCE LAYER
+# Takes in 2 inputs (hidden state and hidden output from an LSTM)
+# and produces a single output (not recurrent)
+class ReduceLayer:
+    def __init__(self,input_size,output_size,name):
+        self.x = input_size
+        self.y = output_size
+        self.w1 = init_weights(input_size,output_size,'{}_w1'.format(name))
+        self.b1 = init_weights(1,output_size,'{}_b1'.format(name))
+        self.w2 = init_weights(input_size,output_size,'{}_w2'.format(name))
+        self.b2 = init_weights(1,output_size,'{}_b2'.format(name))
+        # Variables updated through back-prop
+        self.update_params = [self.w1,self.b1,self.w2,self.b2]
+        # Used in Adagrad calculation
+        self.mw1 = init_zeros(input_size,output_size,'m{}_w1'.format(name))
+        self.mb1 = init_zeros(1,output_size,'m{}_b1'.format(name))
+        self.mw2 = init_zeros(input_size,output_size,'m{}_w2'.format(name))
+        self.mb2 = init_zeros(1,output_size,'m{}_b2'.format(name))
+        self.memory_params = [self.mw1,self.mb1,self.mw2,self.mb2]
         
      # Expects saved output from last layer
-    def forward_prop(self,F,training=True):
-        d = self.dropout(F,self.dropout_p,training)
-        self.pyx = self.activation(T.dot(d,self.w) + T.tile(self.b,(d.shape[0],1)))
+    def forward_prop(self,F,H):
+        red_one = T.dot(F,self.w1) + self.b1
+        red_two = T.dot(H,self.w2) + self.b2
+        self.pyx = T.nnet.sigmoid(red_one * red_two)
         return self.pyx
 
 # Special layer that doesn't have weight matrices
@@ -251,28 +257,15 @@ class LinearLayer:
 # that will take in a weight matrix and a
 # training example then forward prop
 class EmptyLayer:
-    def __init__(self,name,act='sigmoid'):
-        self.act = act
-        self.dropout_p = 1.0
+    def __init__(self,name):
         self.name = name
         
-        # Activation Functions -- non-linearities
-    def activation(self,F):
-        if self.act == 'relu':
-            return T.maximum(F, 0.)
-        elif self.act == 'tanh':
-            return T.tanh(F)
-        elif self.act == 'sigmoid':
-            return T.nnet.sigmoid(F)
-        else:
-            return F
-        
      # Expects saved output from last layer
-    def forward_prop(self,F,W):
+    def forward_prop(self,F,W,B):
         # Note I'm usind W * d instead of my traditional
         # d * W because the dimensions are mismatched
         # due to coming from other functions
-        f = self.activation(T.dot(W[:,:-1],F) + W[:,-1]) # Pulling the last element of W as our bias  
+        f = T.nnet.sigmoid(T.dot(W,F) + B) # Pulling the last element of W as our bias  
         return f
     
 class SoftmaxLayer:

@@ -1,4 +1,4 @@
-(iwordHelpers
+(ivudu.wordHelpers
 WordHelper
 p0
 (dp1

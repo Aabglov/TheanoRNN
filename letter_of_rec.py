@@ -49,18 +49,20 @@ H1 = T.matrix('hidden_update1')
 S2 = T.matrix('hidden_state2')
 H2 = T.matrix('hidden_update2')
 
-
+dir_path = os.path.dirname(os.path.realpath(__file__))
+data_path = os.path.join(dir_path,'data','lor.pkl')
+raw_path = os.path.join(dir_path,'data','input.txt')
 # LOAD DATA
 try:
     # Python 3 load
-    with io.open('lor.pkl','rb') as f:
+    with io.open(data_path,'rb') as f:
         data = pickle.load(f,encoding='utf-8')
     print("Data found, python3, beginning model init...")
-    
+
 except:
     try:
         # Python 2 load
-        with io.open('lor.pkl','rb') as f:
+        with io.open(data_path,'rb') as f:
             data = pickle.load(f)
         print("Data found, python 2, beginning model init...")
     except:
@@ -73,9 +75,9 @@ except:
 ##                    with io.open(file_name,'r',encoding='utf-8') as f:
 ##                        data += f.read()
 
-        with io.open('/Users/keganrabil/Desktop/lor/input.txt','r',encoding='utf-8') as f:
+        with io.open(raw_path,'r',encoding='utf-8') as f:
             data += f.read()
-        with open('lor.pkl','wb+') as f:
+        with open(data_path,'wb+') as f:
             pickle.dump(data,f)
 
 corpus = data#.lower()
@@ -94,7 +96,7 @@ except:
     with open('lor_word_helpers.pkl','wb+') as f:
             pickle.dump(wh,f)
     print("created new wordHelper object")
-    
+
 
 # BATCHES
 TRAIN_BATCHES = 1000
@@ -113,7 +115,7 @@ use_saved = False
 
 # Learning Rate
 lr = 0.1
-    
+
 ####################################################################################################
 # MODEL AND OPTIMIZATION
 ####################################################################################################
@@ -141,7 +143,7 @@ class RNN:
         self.memory_params = self.input_layer.memory_params
         # create a value to hold the current cost when training
         self.current_cost = None
-        
+
         # Hidden layer
         layer_sizes = [self.input_layer.y] + hidden_layer_sizes
         self.hidden_layer_names = []
@@ -154,7 +156,7 @@ class RNN:
                                name
                                ,dropout = 0.5
                            )
-            setattr(self,name,hl)                
+            setattr(self,name,hl)
             # Add the update parameters to the rnn class
             self.update_params += hl.update_params
             self.memory_params += hl.memory_params
@@ -229,7 +231,7 @@ def predictTest(n=100):
         # This value is only used to trigger the calc_cost.
         # It's incorrect, but it doesn't update the parameters to that's okay.
         # Not great, but okay.
-        pred_output_UNUSED = [wh.id2onehot(wh.char2id(corpus[0]))] 
+        pred_output_UNUSED = [wh.id2onehot(wh.char2id(corpus[0]))]
         p,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = predict(pred_input,pred_output_UNUSED,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
         # Changed from argmax to random_choice - good for learnin'
         letter = wh.id2char(np.random.choice(range(wh.vocab_size), p=p.ravel()))
@@ -244,7 +246,7 @@ try:
         raise Exception # Bad form, but effective
 except:
     smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
-    
+
 n = 0
 p = 0
 try:
@@ -259,7 +261,7 @@ try:
         p2 = p + seq_length
         c_input = corpus[p:p2]
         c_output = corpus[p+1:p2+1]
-        
+
         batch_input = []
         batch_output = []
         for j in range(len(c_input)):
@@ -267,11 +269,11 @@ try:
             c2 = c_output[j]
             batch_input.append(wh.char2id(c))
             batch_output.append(wh.id2onehot(wh.char2id(c2)))
-            
+
         loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = back_prop(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
         smooth_loss = smooth_loss * 0.999 + loss * 0.001
         rnn.current_cost = smooth_loss
-        
+
         if not n % 100:
             predictTest()
             print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)
@@ -283,12 +285,10 @@ try:
         n += 1
 except KeyboardInterrupt:
     utils.save_net(rnn,'lor',n)
-        
 
 
- 
-        
+
+
+
 print("Training complete")
 predictTest()
-      
-

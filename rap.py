@@ -53,16 +53,21 @@ S3 = T.dmatrix('hidden_state3')
 H3 = T.dmatrix('hidden_update3')
 
 
+# Data paths
+dir_path = os.path.dirname(os.path.realpath(__file__))
+data_path = os.path.join(dir_path,'data','rap.pkl')
+raw_path = os.path.join(dir_path,'data','rap lyrics', 'lyrics')
+
 # LOAD DATA
 try:
-    with open('rap_lyrics.pkl','rb') as f:
+    with open(data_path,'rb') as f:
         data = pickle.load(f)
     print("Data found, beginning model init...")
-    
+
 except:
     print("Failed to find data file, reading lyrics...")
     data = u''
-    for path, subdirs, files in os.walk('/Users/keganrabil/Desktop/rap lyrics/lyrics'):
+    for path, subdirs, files in os.walk(raw_path):
         for name in files:
             file_name = os.path.join(path, name)
             if file_name[-4:] == '.txt':
@@ -100,7 +105,7 @@ if len(sys.argv) > 1:
 else:
     lr = 0.1
     decay_rate = 1.0#0.33
-    
+
 ####################################################################################################
 # MODEL AND OPTIMIZATION
 ####################################################################################################
@@ -126,7 +131,7 @@ class RNN:
         self.update_params = self.input_layer.update_params
         # Init memory parameters fo Adagrad
         self.memory_params = self.input_layer.memory_params
-        
+
         # Hidden layer
         layer_sizes = [embed_size] + hidden_layer_sizes
         self.hidden_layer_names = []
@@ -135,11 +140,9 @@ class RNN:
             self.hidden_layer_names.append(name)
             hl = LSTMLayer(layer_sizes[i],
                                layer_sizes[i+1],
-                               batch_size,
                                name
-                               ,dropout = 0.5
                            )
-            setattr(self,name,hl)                
+            setattr(self,name,hl)
             # Add the update parameters to the rnn class
             self.update_params += hl.update_params
             self.memory_params += hl.memory_params
@@ -151,6 +154,9 @@ class RNN:
         # Memory Parameters for Adagrad
         self.memory_params += self.output_layer.memory_params
 
+    def genHiddens(self,batch_size,layer):
+        return np.zeros((batch_size,layer.y),dtype='float32'),np.zeros((batch_size,layer.y),dtype='float32')
+
     def calc_cost(self,X,Y,S1,H1,S2,H2,S3,H3):
         e = self.input_layer.forward_prop(X)
         S1,H1 = self.hidden_layer_1.forward_prop(e,S1,H1)
@@ -160,7 +166,12 @@ class RNN:
         cost = T.nnet.categorical_crossentropy(pred,Y).mean()
         return cost,pred,S1,H1,S2,H2,S3,H3
 
-rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
+try:
+    rnn = utils.load_net('rap')
+except:
+    rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
+    print("created new network")
+
 params = rnn.update_params
 memory_params = rnn.memory_params
 
@@ -198,18 +209,15 @@ print("Model initialized, beginning training")
 def predictTest():
     seed = corpus[0]
     output = [seed]
-    hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
-    hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
-    hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
-    hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
-    hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
-    hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
+    hidden_state1, hidden_output1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
+    hidden_state2, hidden_output2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
+    hidden_state3, hidden_output3 = rnn.genHiddens(batch_size,rnn.hidden_layer_3)
     for _ in range(seq_length*4):
         pred_input = [wh.char2id(seed)]
         # This value is only used to trigger the calc_cost.
         # It's incorrect, but it doesn't update the parameters to that's okay.
         # Not great, but okay.
-        pred_output_UNUSED = [wh.id2onehot(wh.char2id(corpus[0]))] 
+        pred_output_UNUSED = [wh.id2onehot(wh.char2id(corpus[0]))]
         p,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = predict(pred_input,pred_output_UNUSED,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
         # Changed from argmax to random_choice - good for learnin'
         letter = wh.id2char(np.random.choice(range(wh.vocab_size), p=p.ravel()))
@@ -217,45 +225,57 @@ def predictTest():
         seed = letter
     print("prediction:",''.join(output))
 
-smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
-n = 0
+if hasattr(rnn,'current_loss'):
+    smooth_loss = rnn.current_loss
+else:
+    smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
+
+if hasattr(rnn,'current_epoch'):
+    n = rnn.current_epoch
+else:
+    n = 0
+
 p = 0
-while True:
-    if p+seq_length+1 >= corpus_len or n == 0:
-        # Reset memory
-        hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
-        hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
-        hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
-        hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
-        hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
-        hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
-        p = 0 # go to beginning
-    p2 = p + seq_length
-    c_input = corpus[p:p2]
-    c_output = corpus[p+1:p2+1]
-    
-    batch_input = []
-    batch_output = []
-    for j in range(len(c_input)):
-        c = c_input[j]
-        c2 = c_output[j]
-        batch_input.append(wh.char2id(c))
-        batch_output.append(wh.id2onehot(wh.char2id(c2)))
-        
-    loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = back_prop(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
-    smooth_loss = smooth_loss * 0.999 + loss * 0.001
+try:
+    while True:
+        if p+seq_length+1 >= corpus_len or n == 0:
+            # Reset memory
+            hidden_state1, hidden_output1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
+            hidden_state2, hidden_output2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
+            hidden_state3, hidden_output3 = rnn.genHiddens(batch_size,rnn.hidden_layer_3)
+            p = 0 # go to beginning
+        p2 = p + seq_length
+        c_input = corpus[p:p2]
+        c_output = corpus[p+1:p2+1]
 
-    if not n % 100:
-        predictTest()
-        print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)
+        batch_input = []
+        batch_output = []
+        for j in range(len(c_input)):
+            c = c_input[j]
+            c2 = c_output[j]
+            batch_input.append(wh.char2id(c))
+            batch_output.append(wh.id2onehot(wh.char2id(c2)))
 
-    p += seq_length
-    n += 1
+        loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = back_prop(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+        smooth_loss = smooth_loss * 0.999 + loss * 0.001
+
+        if not n % 100:
+            predictTest()
+            print("Completed iteration:",n,"Cost: ",smooth_loss,"Learning Rate:",lr)
+
+        if not n % 10000:
+            rnn.current_loss = smooth_loss
+            utils.save_net(rnn,'rap',n)
+
+        rnn.current_epoch = n
+        p += seq_length
+        n += 1
+
+except KeyboardInterrupt:
+    rnn.current_epoch = n
+    rnn.current_loss = smooth_loss
+    utils.save_net(rnn,'rap',n)
 
 
- 
-        
 print("Training complete")
 predictTest()
-      
-

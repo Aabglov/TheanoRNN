@@ -69,7 +69,7 @@ INIT_PRED = T.scalar('init_pred')
 # Word helpers is a class is that handles vocabulary actions
 # like one-hot encoding and managing End-of-Sentence tags.
 # We initialize it with the english alphabet to test
-# all possible (lower case) words.  
+# all possible (lower case) words.
 vocab = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
 try:
     with open('word_helpers_word_reverser.pkl','rb') as f:
@@ -80,7 +80,7 @@ except:
     with open('word_helpers_word_reverser.pkl','wb+') as f:
             pickle.dump(wh,f)
     print("created new wordHelper object")
-    
+
 
 # BATCHES
 batch_size = 1 # MAX_WORD_SIZE
@@ -93,7 +93,7 @@ n_epochs = 100000
 cur_epoch = 0
 cur_grad = 0.
 use_saved = False
-    
+
 ####################################################################################################
 # MODEL AND OPTIMIZATION
 ####################################################################################################
@@ -119,7 +119,7 @@ class RNN:
         self.update_params = self.input_layer.update_params
         # Init memory parameters fo Adagrad
         self.memory_params = self.input_layer.memory_params
-        
+
         # Hidden layer
         layer_sizes = [self.input_layer.y] + hidden_layer_sizes
         self.hidden_layer_names = []
@@ -128,9 +128,8 @@ class RNN:
             self.hidden_layer_names.append(name)
             hl = LSTMLayer(layer_sizes[i],
                                layer_sizes[i+1],
-                               batch_size,
                                name)
-            setattr(self,name,hl)                
+            setattr(self,name,hl)
             # Add the update parameters to the rnn class
             self.update_params += hl.update_params
             self.memory_params += hl.memory_params
@@ -141,6 +140,9 @@ class RNN:
         self.update_params += self.output_layer.update_params
         # Memory Parameters for Adagrad
         self.memory_params += self.output_layer.memory_params
+
+    def genHiddens(self,batch_size,layer):
+        return np.zeros((batch_size,layer.y),dtype='float32'),np.zeros((batch_size,layer.y),dtype='float32')
 
     # pass the word into the network to set all the hidden states.
     def set_hiddens(self,X,S1,H1,S2,H2,S3,H3):
@@ -167,14 +169,14 @@ class RNN:
 
     def calc_cost(self,pred,Y):
         return T.mean(T.nnet.categorical_crossentropy(pred,Y))
-        
-    
+
+
 #nodes = [512,512,512]
 nodes = [128,256,128]
 #nodes = [100,100,100]
 
 try:
-    rnn = utils.load_net('word_reverser') 
+    rnn = utils.load_net('word_reverser')
 except:
     rnn = RNN(wh.vocab_size,embed_size,nodes,batch_size)
     print("created new network")
@@ -235,12 +237,9 @@ print("Model initialized, beginning training")
 
 def predWord(word):
     # RESET HIDDENS
-    hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
-    hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
-    hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
-    hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
-    hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
-    hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
+    hidden_state1, hidden_output1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
+    hidden_state2, hidden_output2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
+    hidden_state3, hidden_output3 = rnn.genHiddens(batch_size,rnn.hidden_layer_3)
     # Prepare forward prop
     init_pred = wh.char2id(wh.eos)
     pred_input = []
@@ -267,19 +266,20 @@ if hasattr(rnn,'current_loss'):
     smooth_loss = rnn.current_loss
 else:
     smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
-    
-n = 0
+
+if hasattr(rnn,'current_epoch'):
+    n = rnn.current_epoch
+else:
+    n = 0
+
 p = 0
 init_pred = 0
 try:
     while True:
         # Reset memory
-        hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape)
-        hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape)
-        hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape)
-        hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape)
-        hidden_state3 = np.zeros(rnn.hidden_layer_3.hidden_state_shape)
-        hidden_output3 = np.zeros(rnn.hidden_layer_3.hidden_output_shape)
+        hidden_state1, hidden_output1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
+        hidden_state2, hidden_output2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
+        hidden_state3, hidden_output3 = rnn.genHiddens(batch_size,rnn.hidden_layer_3)
         init_pred = wh.char2id(wh.eos)
         c_input = wh.genRandWord()
         c_output = c_input[::-1]#wh.reverseWord(c_input)
@@ -290,15 +290,17 @@ try:
             c = c_input[j]
             c2 = c_output[j]
             batch_input.append(wh.char2id(c))
-            
+
             batch_output.append(wh.id2onehot(wh.char2id(c2)))
         hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(batch_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
-        
+
         # Note that batch_input is passed here only to provide back_prop with the appropriate number of items to iterate over.
         # it could just as easily be an empty array of the same length
         loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = back_prop(len(batch_input),init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3,batch_output)
         smooth_loss = smooth_loss * 0.999 + loss * 0.001
-            
+
+        rnn.current_epoch = n
+
         if not n % 100:
             predictTest()
             print("Completed iteration:",n,"Cost: ",smooth_loss)
@@ -307,11 +309,8 @@ try:
             rnn.current_loss = smooth_loss
             utils.save_net(rnn,'word_reverser',n)
         n += 1
-        
+
 except KeyboardInterrupt:
     utils.save_net(rnn,'word_reverser',n)
-        
+
 print("Training complete")
-
-      
-

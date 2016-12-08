@@ -152,7 +152,6 @@ class RNN:
             self.hidden_layer_names.append(name)
             hl = LSTMLayer(layer_sizes[i],
                                layer_sizes[i+1],
-                               batch_size,
                                name
                                ,dropout = 0.5
                            )
@@ -167,6 +166,9 @@ class RNN:
         self.update_params += self.output_layer.update_params
         # Memory Parameters for Adagrad
         self.memory_params += self.output_layer.memory_params
+
+    def genHiddens(self,batch_size,layer):
+        return np.zeros((batch_size,layer.y),dtype='float32'),np.zeros((batch_size,layer.y),dtype='float32')
 
     def calc_cost(self,X,Y,S1,H1,S2,H2):
         e = self.input_layer.forward_prop(X)
@@ -217,10 +219,8 @@ print("Model initialized, beginning training")
 def predictTest(n=100):
     header_in = [wh.char2id(l) for l in "To Whom it may concern"]#corpus[0]
     header_out = [wh.id2onehot(wh.char2id(l)) for l in "o Whom it may concern:"]#corpus[0]
-    hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape,dtype='float32')
-    hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape,dtype='float32')
-    hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape,dtype='float32')
-    hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape,dtype='float32')
+    hidden_state1, hidden_output1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
+    hidden_state2, hidden_output2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
     # Feed header through network
     preds,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = predict(header_in,header_out,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
     # Seed will be colon, the last character in our header
@@ -247,16 +247,18 @@ try:
 except:
     smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
 
-n = 0
+if hasattr(rnn,'current_epoch'):
+    n = rnn.current_epoch
+else:
+    n = 0
+
 p = 0
 try:
     while True:
         if p+seq_length+1 >= corpus_len or n == 0:
             # Reset memory
-            hidden_state1 = np.zeros(rnn.hidden_layer_1.hidden_state_shape,dtype='float32')
-            hidden_output1 = np.zeros(rnn.hidden_layer_1.hidden_output_shape,dtype='float32')
-            hidden_state2 = np.zeros(rnn.hidden_layer_2.hidden_state_shape,dtype='float32')
-            hidden_output2 = np.zeros(rnn.hidden_layer_2.hidden_output_shape,dtype='float32')
+            hidden_state1, hidden_output1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
+            hidden_state2, hidden_output2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
             p = 0 # go to beginning
         p2 = p + seq_length
         c_input = corpus[p:p2]
@@ -273,6 +275,8 @@ try:
         loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = back_prop(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
         smooth_loss = smooth_loss * 0.999 + loss * 0.001
         rnn.current_cost = smooth_loss
+
+        rnn.current_epoch = n
 
         if not n % 100:
             predictTest()

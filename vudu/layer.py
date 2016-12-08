@@ -118,7 +118,7 @@ class LSTMLayer:
             O = dropout(O) # Dropout function lives in utils.py
 
         # since we use this everywhere we just make it a variable
-        #inner_concat = T.concatenate([O,T.reshape(F,((self.batch_size,self.x)))],axis=1)
+        #inner_concat = T.concatenate([O,T.reshape(F,((F.shape[0],self.x)))],axis=1)
         inner_concat = T.concatenate([O,F],axis=1)
 
         forget_gate = T.nnet.sigmoid(T.dot(inner_concat,self.wf) + T.extra_ops.repeat(self.bf, inner_concat.shape[0], axis=0))#self.bf)

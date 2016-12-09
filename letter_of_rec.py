@@ -219,10 +219,10 @@ print("Model initialized, beginning training")
 def predictTest(n=100):
     header_in = [wh.char2id(l) for l in "To Whom it may concern"]#corpus[0]
     header_out = [wh.id2onehot(wh.char2id(l)) for l in "o Whom it may concern:"]#corpus[0]
-    hidden_state1, hidden_output1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
-    hidden_state2, hidden_output2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
+    hs1, ho1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
+    hs2, ho2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
     # Feed header through network
-    preds,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = predict(header_in,header_out,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
+    preds,hs1,ho1,hs2,ho2 = predict(header_in,header_out,hs1,ho1,hs2,ho2)
     # Seed will be colon, the last character in our header
     seed = ":"
     output = [seed]
@@ -232,19 +232,16 @@ def predictTest(n=100):
         # It's incorrect, but it doesn't update the parameters to that's okay.
         # Not great, but okay.
         pred_output_UNUSED = [wh.id2onehot(wh.char2id(corpus[0]))]
-        p,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = predict(pred_input,pred_output_UNUSED,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
+        p,hs1,ho1,hs2,ho2 = predict(pred_input,pred_output_UNUSED,hs1,ho1,hs2,ho2)
         # Changed from argmax to random_choice - good for learnin'
         letter = wh.id2char(np.random.choice(range(wh.vocab_size), p=p.ravel()))
         output.append(letter)
         seed = letter
     print("prediction:",''.join(output))
 
-try:
-    if rnn.current_cost is not None:
-        smooth_loss = rnn.current_cost
-    else:
-        raise Exception # Bad form, but effective
-except:
+if hasattr(rnn,'current_loss'):
+    smooth_loss = rnn.current_loss
+else:
     smooth_loss = -np.log(1.0/wh.vocab_size)*seq_length
 
 if hasattr(rnn,'current_epoch'):
@@ -253,12 +250,14 @@ else:
     n = 0
 
 p = 0
+hs1, ho1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
+hs2, ho2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
 try:
     while True:
         if p+seq_length+1 >= corpus_len or n == 0:
             # Reset memory
-            hidden_state1, hidden_output1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
-            hidden_state2, hidden_output2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
+            hs1, ho1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
+            hs2, ho2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
             p = 0 # go to beginning
         p2 = p + seq_length
         c_input = corpus[p:p2]
@@ -272,7 +271,7 @@ try:
             batch_input.append(wh.char2id(c))
             batch_output.append(wh.id2onehot(wh.char2id(c2)))
 
-        loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2 = back_prop(batch_input,batch_output,hidden_state1,hidden_output1,hidden_state2,hidden_output2)
+        loss,hs1,ho1,hs2,ho2 = back_prop(batch_input,batch_output,hs1,ho1,hs2,ho2)
         smooth_loss = smooth_loss * 0.999 + loss * 0.001
         rnn.current_cost = smooth_loss
 

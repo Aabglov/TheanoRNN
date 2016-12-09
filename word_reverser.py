@@ -237,17 +237,17 @@ print("Model initialized, beginning training")
 
 def predWord(word):
     # RESET HIDDENS
-    hidden_state1, hidden_output1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
-    hidden_state2, hidden_output2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
-    hidden_state3, hidden_output3 = rnn.genHiddens(batch_size,rnn.hidden_layer_3)
+    hs1, ho1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
+    hs2, ho2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
+    hs3, ho3 = rnn.genHiddens(batch_size,rnn.hidden_layer_3)
     # Prepare forward prop
     init_pred = wh.char2id(wh.eos)
     pred_input = []
     for i in range(len(word)):
         pred_input.append(wh.char2id(word[i]))
-    hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(pred_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+    hs1,ho1,hs2,ho2,hs3,ho3 = forward_prop(pred_input,hs1,ho1,hs2,ho2,hs3,ho3)
     # Get Preds
-    predictions,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = predict(len(word),init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+    predictions,hs1,ho1,hs2,ho2,hs3,ho3 = predict(len(word),init_pred,hs1,ho1,hs2,ho2,hs3,ho3)
     pred_word = ''.join([wh.id2char(np.random.choice(wh.vocab_indices, p=p.ravel())) for p in predictions])
     return pred_word
 
@@ -277,9 +277,9 @@ init_pred = 0
 try:
     while True:
         # Reset memory
-        hidden_state1, hidden_output1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
-        hidden_state2, hidden_output2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
-        hidden_state3, hidden_output3 = rnn.genHiddens(batch_size,rnn.hidden_layer_3)
+        hs1, ho1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)
+        hs2, ho2 = rnn.genHiddens(batch_size,rnn.hidden_layer_2)
+        hs3, ho3 = rnn.genHiddens(batch_size,rnn.hidden_layer_3)
         init_pred = wh.char2id(wh.eos)
         c_input = wh.genRandWord()
         c_output = c_input[::-1]#wh.reverseWord(c_input)
@@ -292,11 +292,11 @@ try:
             batch_input.append(wh.char2id(c))
 
             batch_output.append(wh.id2onehot(wh.char2id(c2)))
-        hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = forward_prop(batch_input,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3)
+        hs1,ho1,hs2,ho2,hs3,ho3 = forward_prop(batch_input,hs1,ho1,hs2,ho2,hs3,ho3)
 
         # Note that batch_input is passed here only to provide back_prop with the appropriate number of items to iterate over.
         # it could just as easily be an empty array of the same length
-        loss,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3 = back_prop(len(batch_input),init_pred,hidden_state1,hidden_output1,hidden_state2,hidden_output2,hidden_state3,hidden_output3,batch_output)
+        loss,hs1,ho1,hs2,ho2,hs3,ho3 = back_prop(len(batch_input),init_pred,hs1,ho1,hs2,ho2,hs3,ho3,batch_output)
         smooth_loss = smooth_loss * 0.999 + loss * 0.001
 
         rnn.current_epoch = n

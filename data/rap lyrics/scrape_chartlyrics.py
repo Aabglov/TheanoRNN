@@ -13,8 +13,8 @@ headers={"User-Agent": "Mozilla/15.0 (Windows NT 6.3234; Win64; x64) AppleWebKit
 SITE = "http://www.chartlyrics.com"
 LYRICS = "/apiv1.asmx/SearchLyricDirect?artist={}&song={}"
 API_URL = "http://api.chartlyrics.com/apiv1.asmx/SearchLyricDirect?artist={}&song={}"
-ARTIST = 'eM8r-GlbIkal73OAB2jZrA' # GUID for artist
-NAME = "jay z"
+ARTIST = 'cw1PFjQSLE6HQ9d78hkQUQ' # GUID for artist
+NAME = "kanye west"
 
 PATH = os.path.join(SITE,"{}.aspx".format(ARTIST))
 
@@ -36,7 +36,7 @@ num_lyrics = len(lyric_urls)
 
 # If we get rate-limited and kicked off for a bit we wait
 # then start again at this index
-restart_index = 38 # Default is 0
+restart_index = 0 # Default is 0
 
 # Iterate over all lyric urls
 for i in range(restart_index,len(lyric_urls)):
@@ -80,13 +80,17 @@ for i in range(restart_index,len(lyric_urls)):
             text = u'\n'.join(lines)
 
             # Skip failures
-            if "bad request" not in text.lower() and len(text) > 100:
-                # Save the lyrics for later ingestion
-                with io.open(os.path.join(os.path.dirname(os.path.realpath(__file__)),'lyrics',NAME,'{}.txt'.format(song_title)),'w+',encoding='utf-8') as f:
-                    f.write(text)
+            if "bad request" not in text.lower():
 
-                # Sanity/Progress check
-                print("Downloaded song {}, completed {} of {}".format(song_title,i,num_lyrics-1))
+                # Ensure we have at least 100 letters.
+                # Otherwise the return is likely incomplete or invalid.
+                if len(text) > 100:
+                    # Save the lyrics for later ingestion
+                    with io.open(os.path.join(os.path.dirname(os.path.realpath(__file__)),'lyrics',NAME,'{}.txt'.format(song_title)),'w+',encoding='utf-8') as f:
+                        f.write(text)
+
+                    # Sanity/Progress check
+                    print("Downloaded song {}, completed {} of {}".format(song_title,i,num_lyrics-1))
 
                 # Chartlyrics uses a 20 second governor.  Bummer
                 time.sleep(20)

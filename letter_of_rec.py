@@ -216,7 +216,7 @@ predict = theano.function(inputs=[X_LIST,Y_LIST,S1,H1,S2,H2], outputs=[y_pred,hi
 
 print("Model initialized, beginning training")
 
-def predictTest(n=100):
+def predictTest(n=500):
     header_in = [wh.char2id(l) for l in "To Whom it may concern"]#corpus[0]
     header_out = [wh.id2onehot(wh.char2id(l)) for l in "o Whom it may concern:"]#corpus[0]
     hs1, ho1 = rnn.genHiddens(batch_size,rnn.hidden_layer_1)

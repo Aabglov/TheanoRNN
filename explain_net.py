@@ -12,18 +12,13 @@ import os
 import sys
 # LAYERS
 from vudu.layer import LinearLayer,SoftmaxLayer
-
+from vudu import utils
 ####################################################################################################
 # CONSTANTS
 
 # VARIABLES INIT
 X = T.imatrix('x')
 Y = T.ivector('y')
-
-# BATCHES
-batch_size = 1 # Number of letters we pass in at a time -- just 1
-nodes = [100] # Number of hidden units in our Recurrent Layer
-seq_length = 25 # Arbitrary constant used for printing
 
 class ToyData:
     def __init__(self,num,dim=5):
@@ -58,12 +53,23 @@ class ToyData:
         self.array_data = np.asarray(self.data)
 
 def testToy():
-    for i in range(100):               
+    for i in range(100):
         toy = ToyData(100,5)
         toy.genData()
         data = toy.array_data
         y = data[:,-1]
         print("% positive: {}".format(sum(y)/100.))
+
+########################################  DATA     #########################################################
+num = 1000
+bullshit = ToyData(num)
+bullshit.genData()
+totally_real_data = bullshit.array_data
+x = totally_real_data[:,:-1]
+y = totally_real_data[:,-1]#.reshape((num,1))
+##############################################################################################################
+
+
 
 ######################################################################
 # MODEL AND OPTIMIZER
@@ -80,11 +86,13 @@ class ExplainNetwork:
         self.layer_sizes = layer_sizes
         # Hidden layer
         self.hidden_layer = LinearLayer(layer_sizes[0],layer_sizes[1],'h')
-        self.update_params = self.hidden_layer.update_params
-        self.memory_params = self.hidden_layer.memory_params
         # Output Layer
         #   Just a standard softmax layer.
         self.output_layer = SoftmaxLayer(layer_sizes[1],layer_sizes[2])
+        # Add update parameters
+        # and memory parameters (for Adagrad)
+        self.update_params = self.hidden_layer.update_params + self.output_layer.update_params
+        self.memory_params = self.hidden_layer.memory_params + self.output_layer.memory_params
 
 
     # Our cost function
@@ -96,14 +104,14 @@ class ExplainNetwork:
     def calc_cost(self,X,Y):
         H = self.hidden_layer.forward_prop(X)
         pred = self.output_layer.forward_prop(H)
-        cost = T.nnet.nnet.categorical_crossentropy(pred,Y)
-        return cost,pred
+        cost = T.nnet.categorical_crossentropy(pred,Y)
+        return cost
 
-##    def predict(self,X):
-##        H = self.hidden_layer.forward_prop(X)
-##        pred = self.output_layer.forward_prop(H)
-##        return pred
-    
+    def predict(self,X):
+        H = self.hidden_layer.forward_prop(X)
+        pred = self.output_layer.forward_prop(H)
+        return pred
+
     # RMSprop is for NERDS
     #   The Adagrad function is like
     #   gradient descent on steroids.
@@ -142,20 +150,14 @@ except:
 params = nn.update_params
 memory_params = nn.memory_params
 
-cost,y_pred = nn.calc_cost(X,Y)
+cost = nn.calc_cost(X,Y)
+y_pred = nn.predict(X)
 
 updates = nn.Adagrad(cost,params,memory_params)
 back_prop = theano.function(inputs=[X,Y], outputs=[cost], updates=updates, allow_input_downcast=True)
 predict = theano.function(inputs=[X], outputs=[y_pred], updates=None, allow_input_downcast=True)
 ##############################################################################################################
 
-num = 1000
-bullshit = ToyData(num)
-bullshit.genData()
-totally_real_data = bullshit.array_data
-x = totally_real_data[:,:-1]
-y = totally_real_data[:,-1]#.reshape((num,1))
-##############################################################################################################
 
 if hasattr(nn,'current_loss'):
     smooth_loss = nn.current_loss
@@ -169,8 +171,8 @@ else:
 
 try:
     while True:
-        print("n: {}".format(n))
-        avg_cost = back_prop(x,y)
+        #print("n: {}".format(n))
+        avg_cost = back_prop(x,y)[0]
         smooth_loss = smooth_loss * 0.999 + avg_cost * 0.001
 
         if not n % 1000:
@@ -185,5 +187,3 @@ except KeyboardInterrupt:
     utils.save_net(nn,'explain',n)
 
 print("Training complete")
-
-

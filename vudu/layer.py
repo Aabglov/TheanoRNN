@@ -296,6 +296,6 @@ class SoftmaxLayer:
 
      # Expects saved output from last LSTM layer
     def forward_prop(self,F):
-        self.pyx = (T.dot(F,self.w) + self.b)
+        self.pyx = (T.dot(F,self.w) + T.tile(self.b,(F.shape[0],1)))#+ self.b)
         self.pred = T.nnet.softmax(self.pyx).ravel()
         return self.pred

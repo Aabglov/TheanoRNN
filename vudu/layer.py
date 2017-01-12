@@ -251,6 +251,40 @@ class LinearLayer:
         self.pyx = T.nnet.sigmoid(T.dot(F,self.w) + T.tile(self.b,(F.shape[0],1)))
         return self.pyx
 
+# This layer is basically the same as
+# a normal linear layer except it
+# keeps track of maximally activated units
+class ExplainLayer:
+    def __init__(self,input_size,output_size,name):
+        self.x = input_size
+        self.y = output_size
+        self.w = init_weights(input_size,output_size,'{}_w'.format(name))
+        self.b = init_weights(1,output_size,'{}_b'.format(name))
+        # Variables updated through back-prop
+        self.update_params = [self.w,self.b]
+        # Used in Adagrad calculation
+        self.mw = init_zeros(input_size,output_size,'m{}_w'.format(name))
+        self.mb = init_zeros(1,output_size,'m{}_b'.format(name))
+        self.memory_params = [self.mw,self.mb]
+
+    def getMostImportantUnits(self,matrix,n,max=True):
+        if max:
+            starting_index = n * -1
+        else:
+            starting_index = n
+
+        largest_n = matrix.ravel().argsort()[starting_index:][::-1]
+        max_units = [np.unravel_index(i,matrix.shape) for i in largest_n]
+        return max_units
+
+     # Expects saved output from last layer
+    def forward_prop(self,F):
+        self.pyx = T.nnet.sigmoid(T.dot(F,self.w) + T.tile(self.b,(F.shape[0],1)))
+        self.five_high = self.getMostImportantUnits(self.pyx,5,True)
+        self.five_low  = self.getMostImportantUnits(self.pyx,5,False)
+        return self.pyx
+
+
 # REDUCE LAYER
 # Takes in 2 inputs (hidden state and hidden output from an LSTM)
 # and produces a single output (not recurrent)

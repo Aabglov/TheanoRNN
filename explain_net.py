@@ -144,7 +144,7 @@ class ExplainNetwork:
 try:
     nn = utils.load_net('explain')
 except:
-    nn = ExplainNetwork([5,25,1])
+    nn = ExplainNetwork([5,10,1])
     print("created new network")
 ############################################# BEGIN THEANO FUNCTION DEFINITIONS ###################################
 params = nn.update_params
@@ -162,7 +162,7 @@ predict = theano.function(inputs=[X], outputs=[y_pred], updates=None, allow_inpu
 if hasattr(nn,'current_loss'):
     smooth_loss = nn.current_loss
 else:
-    smooth_loss = -np.log(1.0/1000)*seq_length
+    smooth_loss = 1.0
 
 if hasattr(nn,'iterations'):
     n = nn.iterations

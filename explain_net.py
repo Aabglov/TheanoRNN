@@ -11,14 +11,14 @@ import pickle
 import os
 import sys
 # LAYERS
-from vudu.layer import LinearLayer,SoftmaxLayer
+from vudu.layer import ExplainLayer,SoftmaxLayer
 from vudu import utils
 ####################################################################################################
 # CONSTANTS
 
 # VARIABLES INIT
 X = T.imatrix('x')
-Y = T.ivector('y')
+Y = T.imatrix('y')
 
 class ToyData:
     def __init__(self,num,dim=5):
@@ -66,7 +66,7 @@ bullshit = ToyData(num)
 bullshit.genData()
 totally_real_data = bullshit.array_data
 x = totally_real_data[:,:-1]
-y = totally_real_data[:,-1]#.reshape((num,1))
+y = totally_real_data[:,-1].reshape((num,1))
 ##############################################################################################################
 
 
@@ -85,14 +85,16 @@ class ExplainNetwork:
     def __init__(self,layer_sizes):
         self.layer_sizes = layer_sizes
         # Hidden layer
-        self.hidden_layer = LinearLayer(layer_sizes[0],layer_sizes[1],'h')
+        self.hidden_layer = ExplainLayer(layer_sizes[0],layer_sizes[1],'h')
+        # Hidden layer
+        self.hidden_layer2 = ExplainLayer(layer_sizes[1],layer_sizes[2],'h2')
         # Output Layer
         #   Just a standard softmax layer.
-        self.output_layer = SoftmaxLayer(layer_sizes[1],layer_sizes[2])
+        self.output_layer = ExplainLayer(layer_sizes[2],layer_sizes[3],'o')
         # Add update parameters
         # and memory parameters (for Adagrad)
-        self.update_params = self.hidden_layer.update_params + self.output_layer.update_params
-        self.memory_params = self.hidden_layer.memory_params + self.output_layer.memory_params
+        self.update_params = self.hidden_layer.update_params + self.hidden_layer2.update_params + self.output_layer.update_params
+        self.memory_params = self.hidden_layer.memory_params + self.hidden_layer2.memory_params + self.output_layer.memory_params
 
 
     # Our cost function
@@ -103,14 +105,16 @@ class ExplainNetwork:
     #   It returns the calculated cost, the prediction
     def calc_cost(self,X,Y):
         H = self.hidden_layer.forward_prop(X)
-        pred = self.output_layer.forward_prop(H)
-        cost = T.nnet.categorical_crossentropy(pred,Y)
-        return cost
+        H2 = self.hidden_layer2.forward_prop(H)
+        pred = self.output_layer.forward_prop(H2)
+        cost = T.nnet.binary_crossentropy(pred,Y).mean()
+        return cost,pred,H2,H
 
     def predict(self,X):
         H = self.hidden_layer.forward_prop(X)
-        pred = self.output_layer.forward_prop(H)
-        return pred
+        H2 = self.hidden_layer2.forward_prop(H)
+        pred = self.output_layer.forward_prop(H2)
+        return pred,H2,H
 
     # RMSprop is for NERDS
     #   The Adagrad function is like
@@ -144,18 +148,18 @@ class ExplainNetwork:
 try:
     nn = utils.load_net('explain')
 except:
-    nn = ExplainNetwork([5,10,1])
+    nn = ExplainNetwork([5,10,10,1])
     print("created new network")
 ############################################# BEGIN THEANO FUNCTION DEFINITIONS ###################################
 params = nn.update_params
 memory_params = nn.memory_params
 
-cost = nn.calc_cost(X,Y)
-y_pred = nn.predict(X)
+cost,pred,h2,h = nn.calc_cost(X,Y)
+y_pred,ph2,ph = nn.predict(X)
 
 updates = nn.Adagrad(cost,params,memory_params)
-back_prop = theano.function(inputs=[X,Y], outputs=[cost], updates=updates, allow_input_downcast=True)
-predict = theano.function(inputs=[X], outputs=[y_pred], updates=None, allow_input_downcast=True)
+back_prop = theano.function(inputs=[X,Y], outputs=[cost,pred,h2,h], updates=updates, allow_input_downcast=True)
+predict = theano.function(inputs=[X], outputs=[y_pred,ph2,ph], updates=None, allow_input_downcast=True)
 ##############################################################################################################
 
 
@@ -172,12 +176,14 @@ else:
 try:
     while True:
         #print("n: {}".format(n))
-        avg_cost = back_prop(x,y)[0]
+        bp_cost,bp_pred,bp_h2,bp_h = back_prop(x,y)
+        avg_cost = bp_cost
         smooth_loss = smooth_loss * 0.999 + avg_cost * 0.001
 
         if not n % 1000:
             #predictTest(graph_id)
             print("Completed iteration:",n,"Cost: ",smooth_loss)
+            nn.current_loss = smooth_loss
 
         n += 1
         nn.iterations = n

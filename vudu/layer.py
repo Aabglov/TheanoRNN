@@ -270,18 +270,18 @@ class ExplainLayer:
     def getMostImportantUnits(self,matrix,n,max=True):
         if max:
             starting_index = n * -1
+            largest_n = matrix.ravel().argsort()[starting_index:][::-1]
         else:
             starting_index = n
-
-        largest_n = matrix.ravel().argsort()[starting_index:][::-1]
+            largest_n = matrix.ravel().argsort()[:starting_index] # Largest NEGATIVE n
         max_units = [np.unravel_index(i,matrix.shape) for i in largest_n]
         return max_units
 
      # Expects saved output from last layer
     def forward_prop(self,F):
         self.pyx = T.nnet.sigmoid(T.dot(F,self.w) + T.tile(self.b,(F.shape[0],1)))
-        self.five_high = self.getMostImportantUnits(self.pyx,5,True)
-        self.five_low  = self.getMostImportantUnits(self.pyx,5,False)
+        #self.five_high = self.getMostImportantUnits(self.pyx,5,True)
+        #self.five_low  = self.getMostImportantUnits(self.pyx,5,False)
         return self.pyx
 
 

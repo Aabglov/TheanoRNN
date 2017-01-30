@@ -118,7 +118,8 @@ class RNN:
             # Here's where the update list mentioned in
             # init comes into play.
             updates.append((m,new_m))
-            updates.append((p, p - ((lr * g) / T.sqrt(new_m + 1e-8))))
+            new_p = T.cast( p - ((lr * g) / T.sqrt(new_m + 1e-8)) ,theano.config.floatX)
+            updates.append((p, new_p))
         return updates
 
 

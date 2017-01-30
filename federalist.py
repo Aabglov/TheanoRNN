@@ -90,7 +90,7 @@ class RNN:
         H = self.hidden_layer.forward_prop(X,H)
         pred = self.output_layer.forward_prop(H)
         cost = -T.log(pred[Y])
-        return cost,pred,H
+        return  T.cast(cost,theano.config.floatX),pred,H
 
     # RMSprop is for NERDS
     #   The Adagrad function is like

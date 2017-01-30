@@ -2,13 +2,8 @@
 import numpy as np
 import theano
 import theano.tensor as T
-import pickle
-import random
 from vudu.utils import floatX,dropout
 from theano.tensor.shared_randomstreams import RandomStreams
-
-# SCIPY
-import random
 
 X = T.scalar('x')
 F = T.vector('f')

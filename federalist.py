@@ -114,7 +114,7 @@ class RNN:
         updates = []
         for p,g,m in zip(params, grads, mem):
             g = T.clip(g,-5.,5)
-            new_m = m + (g * g)
+            new_m = T.cast(m + (g * g),theano.config.floatX)
             # Here's where the update list mentioned in
             # init comes into play.
             updates.append((m,new_m))

@@ -332,4 +332,4 @@ class SoftmaxLayer:
     def forward_prop(self,F):
         self.pyx = (T.dot(F,self.w) + T.tile(self.b,(F.shape[0],1)))#+ self.b)
         self.pred = T.nnet.softmax(self.pyx).ravel()
-        return self.pred
+        return T.cast(self.pred,theano.config.floatX)

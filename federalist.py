@@ -21,7 +21,7 @@ X_LIST = T.imatrix('x_list')
 X = T.ivector('x')
 Y_LIST = T.ivector('y_list')
 Y = T.iscalar('y')
-H = T.dmatrix('hidden_update')
+H = T.matrix('hidden_update',dtype=theano.config.floatX)
 
 # LOAD DATA
 corpus = loadText("federalist.txt")

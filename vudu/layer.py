@@ -231,7 +231,7 @@ class RecurrentLayer:
     # Expects embedded input
     def forward_prop(self,F,H):
         H = T.tanh(T.dot(F,self.wx) + T.dot(H,self.wh) + T.extra_ops.repeat(self.bh, H.shape[0], axis=0) )#self.bh)
-        return H
+        return floatX(H)
 
 class LinearLayer:
     def __init__(self,input_size,output_size,name):

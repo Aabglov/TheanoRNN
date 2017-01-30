@@ -6,10 +6,6 @@
 import numpy as np
 import theano
 import theano.tensor as T
-# I/O
-import pickle
-import os
-import sys
 # LAYERS
 from vudu.layer import RecurrentLayer,SoftmaxLayer
 # VUDU -- Helpers
@@ -40,7 +36,7 @@ batch_size = 1 # Number of letters we pass in at a time -- just 1
 nodes = [100] # Number of hidden units in our Recurrent Layer
 seq_length = 25 # Arbitrary constant used for printing
 
-    
+
 ######################################################################
 # MODEL AND OPTIMIZER
 ######################################################################
@@ -63,7 +59,7 @@ class RNN:
         # Output Layer
         #   Just a standard softmax layer.
         self.output_layer = SoftmaxLayer(hidden_layer_size,vocab_size)
-        
+
         # Update Parameters - Backprop
         #   This part is a little weird.
         #   Theano has this weird way of keeping track of which
@@ -120,7 +116,7 @@ class RNN:
             g = T.clip(g,-5.,5)
             new_m = m + (g * g)
             # Here's where the update list mentioned in
-            # init comes into play.  
+            # init comes into play.
             updates.append((m,new_m))
             updates.append((p, p - ((lr * g) / T.sqrt(new_m + 1e-8))))
         return updates
@@ -204,7 +200,7 @@ updates = rnn.Adagrad(scan_cost,params,memory_params)
 #   a list of Y's - letters (index of vocab),
 #   and our hidden layer - H.
 # You may be wondering why H is passed into this function when it really should be
-# 
+#
 back_prop = theano.function(inputs=[X_LIST,Y_LIST,H], outputs=[scan_cost,hidden_state], updates=updates)
 
 #grads = T.grad(cost=scan_cost, wrt=params)
@@ -240,7 +236,7 @@ while True:
     p2 = p + seq_length
     c_input = corpus[p:p2]
     c_output = corpus[p+1:p2+1]
-    
+
     batch_input = []
     batch_output = []
     for j in range(len(c_input)):
@@ -259,9 +255,6 @@ while True:
 
     p += seq_length
     n += 1
-        
+
 print("Training complete")
 predictTest()
-      
-
-

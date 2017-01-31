@@ -34,18 +34,12 @@ corpus_len = len(corpus)
 def castData(data):
     return T.cast(data,dtype=theano.config.floatX)#theano.shared(floatX(data),borrow=True)
 
-def floatX(data):
-    return np.asarray(data, dtype=theano.config.floatX)
-
-def castInt(data):
-    return np.asarray(data, dtype='int32')
-
 # RANDOM INIT
 def init_weights(x,y,name):
-    return theano.shared(floatX(np.random.randn(x,y)*0.01),name=name,borrow=True)
+    return floatX(np.random.randn(x,y)*0.01) #theano.shared(floatX(np.random.randn(x,y)*0.01),name=name,borrow=True)
 
 def init_zeros(x,y,name):
-    return theano.shared(floatX(np.zeros((x,y))),name=name,borrow=True)
+    return floatX(np.zeros(x,y)) #theano.shared(floatX(np.zeros((x,y))),name=name,borrow=True)
 
 # Initialize wordhelper functions
 vocab = list(set(corpus))

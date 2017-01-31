@@ -77,9 +77,9 @@ class SoftmaxLayer:
 
      # Expects saved output from last LSTM layer
     def forward_prop(self,F):
-        self.pyx = (T.dot(F,self.w) + T.tile(self.b,(F.shape[0],1)))#+ self.b)
-        self.pred = T.nnet.softmax(self.pyx).ravel()
-        return T.cast(self.pred,theano.config.floatX)
+        pyx = (T.dot(F,self.w) + T.tile(self.b,(F.shape[0],1)))#+ self.b)
+        pred = T.nnet.softmax(pyx).ravel()
+        return castData(pred)
 
 class RecurrentLayer:
     def __init__(self,input_size,output_size,batch_size,name):
@@ -107,7 +107,7 @@ class RecurrentLayer:
     # Expects embedded input
     def forward_prop(self,F,H):
         H = T.tanh(T.dot(F,self.wx) + T.dot(H,self.wh) + T.extra_ops.repeat(self.bh, H.shape[0], axis=0) )#self.bh)
-        return T.cast(H,theano.config.floatX)
+        return castData(H)
 
 class RNN:
     def __init__(self,vocab_size,hidden_layer_size,batch_size):
@@ -152,7 +152,7 @@ class RNN:
         H = self.hidden_layer.forward_prop(X,H)
         pred = self.output_layer.forward_prop(H)
         cost = -T.log(pred[Y])
-        return  T.cast(cost,theano.config.floatX),pred,H
+        return  castData(cost),pred,H
 
     # RMSprop is for NERDS
     #   The Adagrad function is like

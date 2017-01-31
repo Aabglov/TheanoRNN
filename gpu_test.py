@@ -6,7 +6,8 @@
 import numpy as np
 import theano
 import theano.tensor as T
-
+import os
+from vudu.wordHelpers import WordHelper
 ####################################################################################################
 # CONSTANTS
 
@@ -29,6 +30,22 @@ def loadText(filename):
     return corpus
 corpus = loadText("federalist.txt")
 corpus_len = len(corpus)
+
+def castData(data):
+    return theano.shared(floatX(data),borrow=True)
+
+def floatX(data):
+    return np.asarray(data, dtype=theano.config.floatX)
+
+def castInt(data):
+    return np.asarray(data, dtype='int32')
+
+# RANDOM INIT
+def init_weights(x,y,name):
+    return theano.shared(floatX(np.random.randn(x,y)*0.01),name=name,borrow=True)
+
+def init_zeros(x,y,name):
+    return theano.shared(floatX(np.zeros((x,y))),name=name,borrow=True)
 
 # Initialize wordhelper functions
 vocab = list(set(corpus))

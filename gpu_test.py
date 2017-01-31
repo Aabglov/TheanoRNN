@@ -32,7 +32,7 @@ corpus = loadText("federalist.txt")
 corpus_len = len(corpus)
 
 def castData(data):
-    return theano.shared(floatX(data),borrow=True)
+    return T.cast(data,dtype=theano.config.floatX)#theano.shared(floatX(data),borrow=True)
 
 def floatX(data):
     return np.asarray(data, dtype=theano.config.floatX)

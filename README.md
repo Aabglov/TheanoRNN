@@ -1,6 +1,8 @@
-# VUDU
-Vertically Unified Deep-learning Utility
+# Theano RNN
+A multi-purpose Recurrent Neural Network framework built in Theano.
 
-This is a module designed to be my personal toolbox when tackling machine learning problems.  I've been unsatisfied with other python modules that focused on deep-learning because they either offer little functionality and lots of control or little control and lots of functionality.  I've also been frustrated with the lack of focus around core concepts behind the scenes and obfuscation of necessarcy components of computation.  So I made my own.  
+This started out as a simple framework for neural networks, but blossomed into a full exploration of RNNs.  It was a satisfying exercise that helped me understand both the fundamentals and intricacies of Recurrent nets.  
 
-This module helps me read the bones.
+While I'm happy with the final version of these demos they're limited by the somewhat clunky way Theano handles loops (see all my ramblings about the Theano.scan() method for more details).  This module is great for opening up the body of a RNN and seeing what it does, but not recommended for production environments.
+
+Use at your own risk :)
